@@ -1,0 +1,102 @@
+# ══════════════════════════════════════════════════════════════
+# .gitignore - لغة البرمجة العربية (Arabic Programming Language)
+# ══════════════════════════════════════════════════════════════
+
+# ═══ الملفات التنفيذية والمكتبات ═══
+*.exe
+*.dll
+*.so
+*.dylib
+*.a
+*.lib
+*.obj
+*.o
+*.pdb
+*.bin
+*.ilk
+*.exp
+
+# ═══ مجلدات البناء والنواتج ═══
+build/
+build_vs/
+build_release/
+Debug/
+Release/
+x64/
+Win32/
+out/
+obj/
+obj_compiler/
+obj_new/
+self_hosted_output/
+test_output/
+bootstrap_test/
+اختبارات_المحسن_المتقدم/
+
+# ═══ IDE وملفات المحررات ═══
+.vs/
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ═══ منتجات المترجم المؤقتة ═══
+*.asm
+*.ll
+*.bc
+*.s
+output.asm
+temp_output.cpp
+
+# ═══ ملفات Python ═══
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+
+# ═══ CMake ═══
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+*.cmake
+
+# ═══ ملفات مؤقتة وسجلات ═══
+*.tmp
+*.log
+*.bak
+*.orig
+arabic_compiler.log
+
+# ═══ ملفات Windows ═══
+Thumbs.db
+Desktop.ini
+*.vcxproj.user
+*.vcxproj.filters
+*.suo
+*.opensdf
+*.sdf
+
+# ═══ حزم الإصدارات ═══
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# ═══ بناء التوثيق ═══
+docs/_build/
+
+# ═══ أدوات الذكاء الاصطناعي والمساعدات ═══
+.kiro/
+.qodo/
+.antigravity/
+brain/
+implementation_plan.md
+task.md
+
+# ═══ ملفات البيئة المحلية ═══
+.env
+.env.local

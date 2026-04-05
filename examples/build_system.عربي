@@ -1,0 +1,411 @@
+// نظام البناء البسيط بالعربية
+// الإصدار 1.0 - النواة الأساسية
+
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <vector>
+#include <filesystem>
+#include <sstream>
+#include <map>
+
+namespace fs = std::filesystem;
+
+struct BuildConfig {
+    std::string project_name;
+    std::string project_type;
+    struct {
+        std::string name;
+        std::string version;
+        std::vector<std::string> flags;
+    } compiler;
+    struct {
+        std::vector<std::string> flags;
+        std::vector<std::string> libraries;
+    } linker;
+    std::vector<std::string> source_files;
+    std::vector<std::string> include_dirs;
+    struct {
+        std::string executable;
+        std::string intermediate_dir;
+    } output;
+};
+
+class ArabicBuildSystem {
+private:
+    BuildConfig config;
+    std::vector<std::string> object_files;
+
+public:
+    ArabicBuildSystem() = default;
+
+    // قراءة ملف الإعدادات (معالجة JSON بسيطة)
+    bool loadConfig(const std::string& config_file) {
+        try {
+            std::ifstream file(config_file);
+            if (!file.is_open()) {
+                std::cerr << "خطأ: لا يمكن فتح ملف الإعدادات: " << config_file << std::endl;
+                return false;
+            }
+
+            std::string content((std::istreambuf_iterator<char>(file)),
+                               std::istreambuf_iterator<char>());
+
+            std::cout << "DEBUG: Configuration content loaded, length: " << content.length() << std::endl;
+            // معالجة JSON بسيطة - استخراج القيم الأساسية
+            config.project_name = extractStringValue(content, "project_name");
+            config.project_type = extractStringValue(content, "project_type");
+            std::cout << "DEBUG: Project name: " << config.project_name << std::endl;
+
+            // إعدادات المترجم
+            config.compiler.name = extractStringValue(content, "compiler", "name");
+            config.compiler.version = extractStringValue(content, "compiler", "version");
+            config.compiler.flags = extractArrayValue(content, "compiler", "flags");
+            std::cout << "DEBUG: Compiler flags loaded: " << config.compiler.flags.size() << std::endl;
+
+            // إعدادات الرابط
+            config.linker.flags = extractArrayValue(content, "linker", "flags");
+            config.linker.libraries = extractArrayValue(content, "linker", "libraries");
+            std::cout << "DEBUG: Linker settings loaded" << std::endl;
+
+            // ملفات المصدر
+            config.source_files = extractArrayValue(content, "source_files");
+            std::cout << "DEBUG: Source files list loaded: " << config.source_files.size() << std::endl;
+
+            // مجلدات الإدراج
+            config.include_dirs = extractArrayValue(content, "include_dirs");
+            std::cout << "DEBUG: Include dirs loaded" << std::endl;
+
+            // المخرجات
+            config.output.executable = extractStringValue(content, "output", "executable");
+            config.output.intermediate_dir = extractStringValue(content, "output", "intermediate_dir");
+
+            std::cout << "✅ تم تحميل إعدادات المشروع: " << config.project_name << std::endl;
+            return true;
+
+        } catch (const std::exception& e) {
+            std::cerr << "خطأ في قراءة ملف الإعدادات: " << e.what() << std::endl;
+            return false;
+        }
+    }
+
+private:
+    // دوال مساعدة لمعالجة JSON البسيطة
+    std::string extractStringValue(const std::string& json, const std::string& key) {
+        std::string search = "\"" + key + "\": \"";
+        size_t pos = json.find(search);
+        if (pos == std::string::npos) return "";
+
+        pos += search.length();
+        size_t end = json.find("\"", pos);
+        if (end == std::string::npos) return "";
+
+        return json.substr(pos, end - pos);
+    }
+
+    std::string extractStringValue(const std::string& json, const std::string& parent, const std::string& key) {
+        std::string parent_search = "\"" + parent + "\": {";
+        size_t parent_pos = json.find(parent_search);
+        if (parent_pos == std::string::npos) return "";
+
+        std::string subsection = json.substr(parent_pos);
+        return extractStringValue(subsection, key);
+    }
+
+    std::vector<std::string> extractArrayValue(const std::string& json, const std::string& key) {
+        std::vector<std::string> result;
+        std::string search = "\"" + key + "\": [";
+        size_t pos = json.find(search);
+        if (pos == std::string::npos) return result;
+
+        pos += search.length();
+        size_t end = json.find("]", pos);
+        if (end == std::string::npos) return result;
+
+        std::string array_content = json.substr(pos, end - pos);
+
+        // تقسيم بالفواصل
+        std::stringstream ss(array_content);
+        std::string item;
+        while (std::getline(ss, item, ',')) {
+            // تنظيف العنصر
+            size_t start = item.find_first_not_of(" \t\n\r\"");
+            if (start != std::string::npos) {
+                item.erase(0, start);
+                size_t end = item.find_last_not_of(" \t\n\r\"");
+                if (end != std::string::npos) {
+                    item.erase(end + 1);
+                }
+            } else {
+                item = "";
+            }
+
+            if (!item.empty()) {
+                result.push_back(item);
+            }
+        }
+
+        return result;
+    }
+
+    std::vector<std::string> extractArrayValue(const std::string& json, const std::string& parent, const std::string& key) {
+        std::string parent_search = "\"" + parent + "\": {";
+        size_t parent_pos = json.find(parent_search);
+        if (parent_pos == std::string::npos) return {};
+
+        std::string subsection = json.substr(parent_pos);
+        return extractArrayValue(subsection, key);
+    }
+
+public:
+
+    // العثور على ملفات المصدر
+    std::vector<std::string> findSourceFiles() {
+        std::vector<std::string> files;
+
+        for (const auto& pattern : config.source_files) {
+            // دعم البحث البسيط مع *
+            if (pattern.find('*') != std::string::npos) {
+                // استخراج المجلد الأساسي
+                size_t star_pos = pattern.find('*');
+                std::string base_dir = pattern.substr(0, star_pos);
+                std::string extension = pattern.substr(star_pos + 1);
+
+                // البحث في المجلد
+                if (fs::exists(base_dir) && fs::is_directory(base_dir)) {
+                    for (const auto& entry : fs::recursive_directory_iterator(base_dir)) {
+                        if (entry.is_regular_file() && entry.path().extension() == extension) {
+                            std::string file_path = entry.path().string();
+                            files.push_back(file_path);
+                        }
+                    }
+                }
+            } else {
+                // ملف محدد
+                if (fs::exists(pattern)) {
+                    files.push_back(pattern);
+                }
+            }
+        }
+
+        std::cout << "📁 تم العثور على " << files.size() << " ملف مصدر" << std::endl;
+        return files;
+    }
+
+public:
+
+    // تجميع ملف واحد
+    bool compileFile(const std::string& source_file) {
+        // إنشاء اسم ملف الكائن
+        std::string obj_ext = (config.compiler.name == "gcc") ? ".o" : ".obj";
+        fs::path obj_path = fs::path(config.output.intermediate_dir) /
+                           (fs::path(source_file).stem().string() + obj_ext);
+
+        // إنشاء مجلد الكائنات إذا لم يكن موجوداً
+        fs::create_directories(obj_path.parent_path());
+
+        // بناء أمر التجميع
+        std::string compile_cmd;
+        if (config.compiler.name == "gcc") {
+            compile_cmd = "g++ -c";
+        } else {
+            compile_cmd = "cl /c";
+        }
+
+        // إضافة علامات المترجم
+        for (const auto& flag : config.compiler.flags) {
+            compile_cmd += " " + flag;
+        }
+
+        // إضافة مجلدات الإدراج
+        for (const auto& dir : config.include_dirs) {
+            if (config.compiler.name == "gcc") {
+                compile_cmd += " -I" + dir;
+            } else {
+                compile_cmd += " /I" + dir;
+            }
+        }
+
+        // إضافة الملفات المصدر والمخرج
+        if (config.compiler.name == "gcc") {
+            compile_cmd += " \"" + source_file + "\" -o \"" + obj_path.string() + "\"";
+        } else {
+            compile_cmd += " \"" + source_file + "\" /Fo\"" + obj_path.string() + "\"";
+        }
+
+        std::cout << "🔨 تجميع: " << source_file << " ... " << std::flush;
+
+        // تنفيذ الأمر
+        int result = system(compile_cmd.c_str());
+
+        if (result == 0) {
+            object_files.push_back(obj_path.string());
+            return true;
+        } else {
+            std::cerr << "❌ فشل في تجميع: " << source_file << " (الأمر: " << compile_cmd << ")" << std::endl;
+            return false;
+        }
+    }
+
+    // ربط الملفات
+    bool linkFiles() {
+        if (object_files.empty()) {
+            std::cerr << "❌ لا توجد ملفات كائن للربط" << std::endl;
+            return false;
+        }
+
+        // بناء أمر الربط
+        std::string link_cmd;
+        if (config.compiler.name == "gcc") {
+            link_cmd = "g++";
+        } else {
+            link_cmd = "link";
+        }
+
+        // إضافة علامات الرابط
+        if (config.compiler.name == "msvc") {
+            if (config.project_type == "windows") {
+                link_cmd += " /SUBSYSTEM:WINDOWS";
+            } else {
+                link_cmd += " /SUBSYSTEM:CONSOLE";
+            }
+        }
+
+        // إضافة علامات الرابط الإضافية
+        for (const auto& flag : config.linker.flags) {
+            if (config.compiler.name == "msvc") {
+                if (flag != "/SUBSYSTEM:WINDOWS" && flag != "/SUBSYSTEM:CONSOLE") {
+                    link_cmd += " " + flag;
+                }
+            } else {
+                link_cmd += " " + flag;
+            }
+        }
+
+        // إضافة ملفات الكائنات
+        for (const auto& obj : object_files) {
+            link_cmd += " \"" + obj + "\"";
+        }
+
+        // إضافة المكتبات
+        for (const auto& lib : config.linker.libraries) {
+            link_cmd += " " + lib;
+        }
+
+        // إضافة ملف الخرج
+        if (config.compiler.name == "gcc") {
+            link_cmd += " -o \"" + config.output.executable + "\"";
+        } else {
+            link_cmd += " /OUT:\"" + config.output.executable + "\"";
+        }
+
+        std::cout << "🔗 ربط الملفات..." << std::endl;
+
+        // تنفيذ الأمر
+        int result = system(link_cmd.c_str());
+
+        if (result == 0) {
+            std::cout << "✅ تم إنشاء البرنامج التنفيذي: " << config.output.executable << std::endl;
+            return true;
+        } else {
+            std::cerr << "❌ فشل في ربط الملفات (الأمر: " << link_cmd << ")" << std::endl;
+            return false;
+        }
+    }
+
+    // البناء الكامل
+    bool build() {
+        std::cout << "🚀 بدء بناء المشروع: " << config.project_name << std::endl;
+        std::cout << "نوع المشروع: " << config.project_type << std::endl;
+        std::cout << "المترجم: " << config.compiler.name << " " << config.compiler.version << std::endl;
+        std::cout << std::endl;
+
+        // العثور على ملفات المصدر
+        auto source_files = findSourceFiles();
+        if (source_files.empty()) {
+            std::cerr << "❌ لم يتم العثور على ملفات مصدر" << std::endl;
+            return false;
+        }
+
+        // تجميع كل ملف
+        bool compile_success = true;
+        for (const auto& file : source_files) {
+            if (!compileFile(file)) {
+                compile_success = false;
+                break;
+            }
+        }
+
+        if (!compile_success) {
+            return false;
+        }
+
+        // ربط الملفات
+        return linkFiles();
+    }
+
+    // تنظيف الملفات المؤقتة
+    void clean() {
+        std::cout << "🧹 تنظيف الملفات المؤقتة..." << std::endl;
+
+        // حذف مجلد الكائنات
+        if (fs::exists(config.output.intermediate_dir)) {
+            fs::remove_all(config.output.intermediate_dir);
+            std::cout << "✅ تم حذف مجلد: " << config.output.intermediate_dir << std::endl;
+        }
+
+        // حذف البرنامج التنفيذي
+        if (fs::exists(config.output.executable)) {
+            fs::remove(config.output.executable);
+            std::cout << "✅ تم حذف ملف: " << config.output.executable << std::endl;
+        }
+
+        object_files.clear();
+    }
+};
+
+int main(int argc, char* argv[]) {
+    // تهيئة وحدة التحكم لدعم UTF-8
+    setlocale(LC_ALL, ".UTF-8");
+
+    std::cout << "🏗️  نظام البناء العربي - الإصدار 1.0" << std::endl;
+    std::cout << "=====================================" << std::endl;
+
+    ArabicBuildSystem builder;
+
+    std::string config_file = "build_config.json";
+    if (argc > 1) {
+        std::string first_arg = argv[1];
+        if (first_arg.find(".json") != std::string::npos) {
+            config_file = first_arg;
+        }
+    }
+
+    // تحميل الإعدادات
+    if (!builder.loadConfig(config_file)) {
+        return 1;
+    }
+
+    // معالجة الأوامر
+    std::string command = "";
+    if (argc > 1) {
+        std::string last_arg = argv[argc - 1];
+        if (last_arg == "clean" || last_arg == "نظيف" || 
+            last_arg == "rebuild" || last_arg == "إعادة" || 
+            last_arg == "build" || last_arg == "بناء") {
+            command = last_arg;
+        }
+    }
+
+    if (command == "clean" || command == "نظيف") {
+        builder.clean();
+    } else if (command == "rebuild" || command == "إعادة") {
+        builder.clean();
+        return builder.build() ? 0 : 1;
+    } else {
+        // البناء العادي (إما بدون أمر أو بأمر بناء صريح)
+        return builder.build() ? 0 : 1;
+    }
+
+    return 0;
+}

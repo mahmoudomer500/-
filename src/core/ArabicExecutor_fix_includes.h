@@ -1,0 +1,15 @@
+#include "ArabicExecutor.h"
+#include "ArabicParser.h"
+#include "ArabicTextUtils.h"
+#include "ArabicMemoryManager.h"
+#include <iostream>
+#include <stdexcept>
+#include <chrono>
+#include <sstream>
+#include <string>
+#include <vector>
+#include <map>
+#include <memory>
+#include <algorithm>
+#include <fstream>
+#include "../modules/ai/ArabicVisionBridge.h"

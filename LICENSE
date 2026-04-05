@@ -1,0 +1,78 @@
+# MIT License
+
+**Arabic Programming Language**
+**لغة البرمجة العربية**
+
+Copyright (c) 2024-2026 Arabic Programming Language Contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+**رخصة MIT**
+
+حقوق النشر (c) 2024-2026 مساهمو لغة البرمجة العربية
+
+بموجب هذه الرخصة، يُسمح لأي شخص يحصل على نسخة من هذا البرنامج
+ووثائقه المرتبطة ("البرنامج") بالتعامل مع البرنامج بدون قيود،
+بما في ذلك بدون حصر حقوق الاستخدام، النسخ، التعديل، الدمج،
+النشر، التوزيع، الترخيص من الباطن، و/أو بيع نسخ من البرنامج،
+ولمن يُسمح لهم بالبرنامج، شريطة استيفاء الشروط التالية:
+
+---
+
+## الشروط
+
+1. يجب أن تتضمن أي نسخة من البرنامج أو جزء كبير منه
+   إشعار حقوق النشر أعلاه وهذه الرخصة بالكامل.
+
+2. يجب أن يتم تضمين إشعار المصدر هذا في جميع النسخ
+   أو الأجزاء الكبيرة من البرنامج.
+
+---
+
+## إخلاء المسؤولية
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+** يتم توفير البرنامج "كما هو"، بدون أي ضمانات من أي نوع، صريحة أو ضمنية،
+بما في ذلك على سبيل المثال لا الحصر ضمانات القابلية للتسويق،
+الملاءمة لغرض معين وعدم الانتهاك. في أي حال لن يكون المؤلفون
+أو حاملو حقوق النشر مسؤولين عن أي مطالبات أو أضرار أو مسؤوليات أخرى،
+سواء في إجراء عقد أو ضرر أو غير ذلك، الناتجة عن أو المرتبطة بالبرنامج
+أو الاستخدام أو التعاملات الأخرى في البرنامج.
+
+---
+
+## مساهمات
+
+بإرسال مساهمات إلى هذا المشروع، فأنت توافق على أن مساهماتك
+ستكون مرخصة بنفس رخصة MIT.
+
+---
+
+## ملاحظات إضافية
+
+- هذا البرنامج يدعم Unicode وUTF-8 بالكامل
+- مُصمم للغة العربية (RTL)
+- يتضمن دعم للتجميع الذاتي (Self-Hosting)
+- ينتج ملفات تنفيذية بصيغة PE (Windows)
+
+---
+
+<div align="center">
+
+**رُخصة مفتوحة المصدر لتشجيع الابتكار والتعليم**
+
+</div>
