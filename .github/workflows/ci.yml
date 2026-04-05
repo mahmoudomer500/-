@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [ main, develop ]
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   # ══════════════════════════════════════════════════════════════
   # اختبار البناء على Windows (MinGW)
@@ -67,66 +70,18 @@ jobs:
         retention-days: 30
 
   # ══════════════════════════════════════════════════════════════
-  # اختبار البناء على Linux
+  # اختبار البناء على Linux (معطل مؤقتاً - المشروع Windows-only)
   # ══════════════════════════════════════════════════════════════
   build-linux:
     runs-on: ubuntu-latest
+    if: false  # Disabled - project uses Windows-specific APIs
 
     steps:
     - name: Checkout
       uses: actions/checkout@v5
 
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y g++ build-essential
-
-    - name: Build Compiler
-      run: |
-        mkdir -p build_release/Release
-        echo "Compiling Linux-compatible files..."
-        # Only compile files known to work on Linux
-        FILES="src/main.cpp src/core/ArabicVisionBridge_stub.cpp src/modules/ai/WindowManager_stub.cpp"
-        for f in src/core/Arabic*.cpp; do
-          [ -f "$f" ] || continue
-          case "$f" in
-            *Compiler*|*Executor*|*Text*|*Linker*|*Network*|*AppsAPI*|*GUI*|*VisionBridge*|*ArraySIMD*) continue ;;
-          esac
-          FILES="$FILES $f"
-        done
-        for f in src/runtime/Arabic*.cpp; do
-          [ -f "$f" ] || continue
-          case "$f" in
-            *Runtime*) continue ;;
-          esac
-          FILES="$FILES $f"
-        done
-        for f in src/stdlib/*.cpp src/modules/core/*.cpp src/utils/core/*.cpp src/utils/debug/*.cpp; do
-          [ -f "$f" ] || continue
-          FILES="$FILES $f"
-        done
-        echo "Files: $FILES"
-        echo ""
-        g++ -std=c++17 -O2 -D_CRT_SECURE_NO_WARNINGS \
-          -finput-charset=UTF-8 -fexec-charset=UTF-8 \
-          -Isrc/core -Isrc/include -Isrc/runtime \
-          -Isrc/modules -Isrc/modules/core \
-          -Isrc/utils/core -Isrc/utils/debug \
-          -Isrc/stdlib -Isrc/stdlib/io -Isrc/stdlib/math -Isrc/stdlib/collections \
-          -Isrc/api \
-          $FILES \
-          -o build_release/Release/arabic_compiler \
-          -lpthread -ldl 2>&1
-        echo "Exit code: $?"
-        ls -la build_release/Release/
-      shell: bash
-
-    - name: Upload Compiler Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: arabic-compiler-linux
-        path: build_release/Release/arabic_compiler
-        retention-days: 30
+    - name: Skip
+      run: echo "Linux build disabled - project uses Windows-specific APIs (WinHTTP, Win32 Console, GDI)"
 
   # ══════════════════════════════════════════════════════════════
   # فحص جودة الكود
