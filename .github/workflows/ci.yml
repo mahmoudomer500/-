@@ -84,31 +84,33 @@ jobs:
     - name: Build Compiler
       run: |
         mkdir -p build_release/Release
-        echo "Compiling..."
-        # Build file list - exclude Windows-only files
+        echo "Compiling Linux-compatible files..."
+        # Only compile files known to work on Linux
         FILES="src/main.cpp src/core/ArabicVisionBridge_stub.cpp src/modules/ai/WindowManager_stub.cpp"
-        for dir in src/core src/runtime src/stdlib src/modules/core src/utils/core src/utils/debug; do
-          for f in $dir/*.cpp; do
-            [ -f "$f" ] || continue
-            case "$f" in
-              *ArabicNetwork*|*ArabicAppsAPI*|*ArabicGUI*|*ArabicVisionBridge*) continue ;;
-              *ArabicLinker*|*ArabicText*|*ArabicTextUtils*) continue ;;
-              *ArabicArraySIMD*|*WindowManager_stub*) continue ;;
-              *ArabicRuntime*) continue ;;
-              *ArabicProfiler*) continue ;;
-              *ArabicCompiler*) continue ;;
-              *ArabicExecutor*) continue ;;
-              *ArabicExecutor_headers*) continue ;;
-            esac
-            FILES="$FILES $f"
-          done
+        for f in src/core/Arabic*.cpp; do
+          [ -f "$f" ] || continue
+          case "$f" in
+            *Compiler*|*Executor*|*Text*|*Linker*|*Network*|*AppsAPI*|*GUI*|*VisionBridge*|*ArraySIMD*) continue ;;
+          esac
+          FILES="$FILES $f"
+        done
+        for f in src/runtime/Arabic*.cpp; do
+          [ -f "$f" ] || continue
+          case "$f" in
+            *Runtime*) continue ;;
+          esac
+          FILES="$FILES $f"
+        done
+        for f in src/stdlib/*.cpp src/modules/core/*.cpp src/utils/core/*.cpp src/utils/debug/*.cpp; do
+          [ -f "$f" ] || continue
+          FILES="$FILES $f"
         done
         echo "Files: $FILES"
         echo ""
         g++ -std=c++17 -O2 -D_CRT_SECURE_NO_WARNINGS \
           -finput-charset=UTF-8 -fexec-charset=UTF-8 \
           -Isrc/core -Isrc/include -Isrc/runtime \
-          -Isrc/modules -Isrc/modules/core -Isrc/modules/ai \
+          -Isrc/modules -Isrc/modules/core \
           -Isrc/utils/core -Isrc/utils/debug \
           -Isrc/stdlib -Isrc/stdlib/io -Isrc/stdlib/math -Isrc/stdlib/collections \
           -Isrc/api \
