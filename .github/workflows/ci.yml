@@ -84,13 +84,15 @@ jobs:
         ls src/stdlib/*.cpp 2>/dev/null | head -5
         echo ""
         echo "Compiling..."
-        # Build file list
+        # Build file list - exclude Windows-only files
         FILES="src/main.cpp"
         for dir in src/core src/runtime src/stdlib src/modules/core src/utils/core src/utils/debug; do
           for f in $dir/*.cpp; do
             [ -f "$f" ] || continue
             case "$f" in
-              *ArabicNetwork*|*ArabicAppsAPI*|*ArabicGUI*) continue ;;
+              *ArabicNetwork*|*ArabicAppsAPI*|*ArabicGUI*|*ArabicVisionBridge*) continue ;;
+              *ArabicLinker*|*ArabicText*|*ArabicTextUtils*) continue ;;
+              *ArabicArraySIMD*) continue ;;
             esac
             FILES="$FILES $f"
           done
