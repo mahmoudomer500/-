@@ -33,9 +33,8 @@ jobs:
         $cppFiles = Get-ChildItem -Path src/core,src/runtime,src/stdlib,src/utils/core,src/utils/debug,src/modules/core -Recurse -Filter "*.cpp" |
           Where-Object { $excludeNames -notcontains $_.Name } |
           Select-Object -ExpandProperty FullName
-        # Add stub files
-        $cppFiles += (Get-Item "src/core/ArabicVisionBridge_stub.cpp").FullName
-        $cppFiles += (Get-Item "src/modules/ai/ArabicComputerVision.cpp").FullName
+        $cppFiles += (Resolve-Path "src/core/ArabicVisionBridge_stub.cpp").Path
+        $cppFiles += (Resolve-Path "src/modules/ai/ArabicComputerVision.cpp").Path
         $cppFiles += "src/main.cpp"
         Write-Host "Compiling $($cppFiles.Count) files..."
         $includeDirs = @(
