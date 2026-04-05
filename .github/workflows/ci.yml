@@ -29,10 +29,12 @@ jobs:
         $env:PATH = "C:\ProgramData\mingw64\mingw64\bin;$env:PATH"
         New-Item -ItemType Directory -Force -Path build_release/Release | Out-Null
         # Exclude files by name (not full path) that depend on missing implementations
-        $excludeNames = @("ArabicAppsAPI.cpp", "ArabicNetwork.cpp", "ArabicGUI.cpp", "ArabicVisionBridge.cpp", "ArabicComputerVision.cpp", "ArabicTextClassifier.cpp", "WindowManager_stub.cpp")
+        $excludeNames = @("ArabicAppsAPI.cpp", "ArabicNetwork.cpp", "ArabicGUI.cpp", "ArabicVisionBridge.cpp", "ArabicTextClassifier.cpp", "WindowManager_stub.cpp", "ArabicVisionBridge_stub.cpp")
         $cppFiles = Get-ChildItem -Path src/core,src/runtime,src/stdlib,src/utils/core,src/utils/debug,src/modules/core -Recurse -Filter "*.cpp" |
           Where-Object { $excludeNames -notcontains $_.Name } |
           Select-Object -ExpandProperty FullName
+        # Add ArabicComputerVision.cpp for WindowManager::pumpMessages()
+        $cppFiles += "src/modules/ai/ArabicComputerVision.cpp"
         $cppFiles += "src/main.cpp"
         Write-Host "Compiling $($cppFiles.Count) files..."
         $includeDirs = @(
