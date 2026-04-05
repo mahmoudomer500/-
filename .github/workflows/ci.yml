@@ -32,11 +32,14 @@ jobs:
         $excludeNames = @("ArabicAppsAPI.cpp", "ArabicNetwork.cpp", "ArabicGUI.cpp", "ArabicVisionBridge.cpp", "ArabicTextClassifier.cpp", "WindowManager_stub.cpp", "ArabicVisionBridge_stub.cpp")
         $cppFiles = Get-ChildItem -Path src/core,src/runtime,src/stdlib,src/utils/core,src/utils/debug,src/modules/core -Recurse -Filter "*.cpp" |
           Where-Object { $excludeNames -notcontains $_.Name } |
-          Select-Object -ExpandProperty FullName
+          Select-Object -ExpandProperty FullName |
+          Select-Object -Unique
         # Add stub files explicitly (once only)
         $cppFiles += "$PWD/src/core/ArabicVisionBridge_stub.cpp"
         $cppFiles += "$PWD/src/modules/ai/ArabicComputerVision.cpp"
         $cppFiles += "src/main.cpp"
+        # Remove duplicates by normalizing paths
+        $cppFiles = $cppFiles | ForEach-Object { $_.Replace('\', '/').Replace('//', '/') } | Sort-Object -Unique
         Write-Host "Files to compile: $($cppFiles.Count)"
         Write-Host "Compiling $($cppFiles.Count) files..."
         $includeDirs = @(
