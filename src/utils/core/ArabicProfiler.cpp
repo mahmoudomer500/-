@@ -686,7 +686,7 @@ namespace ArabicLanguage {
         results.push_back(name1 + ": " + std::to_string(time1.count()) + "ms");
         results.push_back(name2 + ": " + std::to_string(time2.count()) + "ms");
 
-        double ratio = static_cast<double>(time1.count()) / std::max(1LL, time2.count());
+        double ratio = static_cast<double>(time1.count()) / std::max(static_cast<long long>(1), static_cast<long long>(time2.count()));
         if (ratio > 1.1) {
             results.push_back(name2 + " أسرع بنسبة " + std::to_string((ratio - 1.0) * 100) + "%");
         } else if (ratio < 0.9) {

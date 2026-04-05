@@ -9,6 +9,7 @@
 #include <codecvt>
 #include <locale>
 #include <algorithm>    // ✅ إضافة جديد لـ std::max
+#include <cstring>      // ✅ memcpy, memmove
 
 namespace ArabicLanguage {
 

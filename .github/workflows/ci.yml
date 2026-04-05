@@ -80,21 +80,18 @@ jobs:
     - name: Build Compiler
       run: |
         mkdir -p build_release/Release
-        echo "Listing source directories..."
-        ls src/core/*.cpp 2>/dev/null | head -5
-        ls src/runtime/*.cpp 2>/dev/null | head -5
-        ls src/stdlib/*.cpp 2>/dev/null | head -5
-        echo ""
         echo "Compiling..."
         # Build file list - exclude Windows-only files
-        FILES="src/main.cpp"
-        for dir in src/core src/runtime src/stdlib src/modules/core src/utils/core src/utils/debug; do
+        FILES="src/main.cpp src/core/ArabicVisionBridge_stub.cpp src/modules/ai/WindowManager_stub.cpp"
+        for dir in src/core src/runtime src/stdlib src/modules/core src/modules/ai src/utils/core src/utils/debug; do
           for f in $dir/*.cpp; do
             [ -f "$f" ] || continue
             case "$f" in
-              *ArabicNetwork*|*ArabicAppsAPI*|*ArabicGUI*|*ArabicVisionBridge*) continue ;;
+              *ArabicNetwork*|*ArabicAppsAPI*|*ArabicGUI*|*ArabicVisionBridge_stub*) continue ;;
               *ArabicLinker*|*ArabicText*|*ArabicTextUtils*) continue ;;
-              *ArabicArraySIMD*) continue ;;
+              *ArabicArraySIMD*|*WindowManager_stub*) continue ;;
+              *ArabicRuntime*) continue ;;
+              *ArabicProfiler*) continue ;;
             esac
             FILES="$FILES $f"
           done
@@ -104,7 +101,7 @@ jobs:
         g++ -std=c++17 -O2 -D_CRT_SECURE_NO_WARNINGS \
           -finput-charset=UTF-8 -fexec-charset=UTF-8 \
           -Isrc/core -Isrc/include -Isrc/runtime \
-          -Isrc/modules -Isrc/modules/core \
+          -Isrc/modules -Isrc/modules/core -Isrc/modules/ai \
           -Isrc/utils/core -Isrc/utils/debug \
           -Isrc/stdlib -Isrc/stdlib/io -Isrc/stdlib/math -Isrc/stdlib/collections \
           -Isrc/api \
