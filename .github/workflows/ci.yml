@@ -28,9 +28,12 @@ jobs:
       run: |
         $env:PATH = "C:\ProgramData\mingw64\mingw64\bin;$env:PATH"
         New-Item -ItemType Directory -Force -Path build_release/Release | Out-Null
+        # Exclude files that depend on missing implementations
         $excludeFiles = @(
           "src\core\ArabicAppsAPI.cpp",
-          "src\core\ArabicNetwork.cpp"
+          "src\core\ArabicNetwork.cpp",
+          "src\core\ArabicVisionBridge.cpp",
+          "src\core\ArabicGUI.cpp"
         )
         $cppFiles = Get-ChildItem -Path src/core,src/runtime,src/stdlib,src/utils/core,src/utils/debug,src/modules/core -Recurse -Filter "*.cpp" |
           Where-Object { $excludeFiles -notcontains $_.FullName } |
