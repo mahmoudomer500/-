@@ -1,3 +1,4 @@
+﻿<<<<<<< HEAD
 ﻿# لغة البرمجة العربية 🌍
 
 <div align="center">
@@ -424,3 +425,7 @@ build_release\Release\arabic_compiler.exe --mode run examples/basic/hello.عرب
 ```
 
 **License:** MIT
+=======
+# -
+لغة برمجة عربية كتبت بلغة سي ++
+>>>>>>> 99a68acbddefc40e4e6cacadb7c4d0302bd64c0d
