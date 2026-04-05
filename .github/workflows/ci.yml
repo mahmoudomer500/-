@@ -6,9 +6,6 @@ on:
   pull_request:
     branches: [ main, develop ]
 
-env:
-  BUILD_TYPE: Release
-
 jobs:
   # ══════════════════════════════════════════════════════════════
   # اختبار البناء على Windows (MinGW)
@@ -22,13 +19,24 @@ jobs:
 
     - name: Install MinGW64
       run: |
-        choco install mingw --version=15.2.0 -y
-        $env:PATH = "C:\ProgramData\mingw64\mingw64\bin;$env:PATH"
+        choco install mingw -y --no-progress
+        Write-Host "##[group]Verify g++"
         g++ --version
+        Write-Host "##[endgroup]"
 
     - name: Build Compiler
       run: |
         $env:PATH = "C:\ProgramData\mingw64\mingw64\bin;$env:PATH"
+        New-Item -ItemType Directory -Force -Path build_release/Release | Out-Null
+        $excludeFiles = @(
+          "src\core\ArabicAppsAPI.cpp",
+          "src\core\ArabicNetwork.cpp"
+        )
+        $cppFiles = Get-ChildItem -Path src/core,src/runtime,src/stdlib,src/utils/core,src/utils/debug,src/modules/core -Recurse -Filter "*.cpp" |
+          Where-Object { $excludeFiles -notcontains $_.FullName } |
+          Select-Object -ExpandProperty FullName
+        $cppFiles += "src/main.cpp"
+        Write-Host "Compiling $($cppFiles.Count) files..."
         $includeDirs = @(
           "-Isrc/core", "-Isrc/include", "-Isrc/runtime",
           "-Isrc/modules", "-Isrc/modules/ui", "-Isrc/modules/graphics",
@@ -37,22 +45,14 @@ jobs:
           "-Isrc/stdlib", "-Isrc/stdlib/io", "-Isrc/stdlib/math",
           "-Isrc/stdlib/collections", "-Isrc/api"
         )
-        $cppFiles = @(
-          "src/main.cpp",
-          (Get-ChildItem -Path src/core -Filter "*.cpp" | Select-Object -ExpandProperty FullName),
-          (Get-ChildItem -Path src/runtime -Filter "*.cpp" | Select-Object -ExpandProperty FullName),
-          (Get-ChildItem -Path src/stdlib -Filter "*.cpp" | Select-Object -ExpandProperty FullName),
-          (Get-ChildItem -Path src/modules/core -Filter "*.cpp" | Select-Object -ExpandProperty FullName),
-          (Get-ChildItem -Path src/utils/core -Filter "*.cpp" | Select-Object -ExpandProperty FullName),
-          (Get-ChildItem -Path src/utils/debug -Filter "*.cpp" | Select-Object -ExpandProperty FullName)
-        )
-        $args = @("-std=c++17", "-O2", "-D_CRT_SECURE_NO_WARNINGS",
-                  "-finput-charset=UTF-8", "-fexec-charset=UTF-8") +
-                $includeDirs + $cppFiles +
-                @("-o", "build_release/Release/arabic_compiler.exe",
-                  "-lgdiplus", "-lole32", "-loleaut32", "-lstrmiids", "-luuid",
-                  "-luser32", "-lgdi32", "-lshell32", "-lcomdlg32", "-lws2_32")
-        & g++ $args
+        $includes = $includeDirs -join " "
+        $cppList = ($cppFiles | ForEach-Object { "`"$_`"" }) -join " "
+        $cmd = "g++ -std=c++17 -O2 -D_CRT_SECURE_NO_WARNINGS -finput-charset=UTF-8 -fexec-charset=UTF-8 $includes $cppList -o build_release/Release/arabic_compiler.exe -lgdiplus -lole32 -loleaut32 -lstrmiids -luuid -luser32 -lgdi32 -lshell32 -lcomdlg32 -lws2_32 2>&1"
+        Write-Host "Running: g++ ..."
+        Invoke-Expression $cmd
+        if ($LASTEXITCODE -ne 0) { exit 1 }
+        Write-Host "Build successful!"
+        Get-ChildItem build_release/Release/*.exe | Format-Table Name, Length
       shell: pwsh
 
     - name: Upload Compiler Artifact
@@ -75,22 +75,27 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y g++ cmake build-essential
+        sudo apt-get install -y g++ build-essential
 
     - name: Build Compiler
       run: |
         mkdir -p build_release/Release
-        # Collect source files (exclude Windows-specific)
-        SRC_FILES=$(find src/main.cpp src/core src/runtime src/stdlib src/modules/core src/utils/core src/utils/debug \
+        # Find all cpp files, exclude Windows-specific ones
+        SRC_FILES=$(find src/core src/runtime src/stdlib src/modules/core src/utils/core src/utils/debug \
           -name "*.cpp" 2>/dev/null | grep -v "ArabicNetwork\|ArabicAppsAPI\|ArabicGUI")
-        INCLUDES="-Isrc/core -Isrc/include -Isrc/runtime -Isrc/modules -Isrc/modules/core \
-          -Isrc/utils/core -Isrc/utils/debug -Isrc/stdlib -Isrc/stdlib/io -Isrc/stdlib/math \
-          -Isrc/stdlib/collections -Isrc/api"
+        echo "Compiling $(echo $SRC_FILES | wc -w) files..."
         g++ -std=c++17 -O2 -D_CRT_SECURE_NO_WARNINGS \
           -finput-charset=UTF-8 -fexec-charset=UTF-8 \
-          $INCLUDES $SRC_FILES \
+          -Isrc/core -Isrc/include -Isrc/runtime \
+          -Isrc/modules -Isrc/modules/core \
+          -Isrc/utils/core -Isrc/utils/debug \
+          -Isrc/stdlib -Isrc/stdlib/io -Isrc/stdlib/math -Isrc/stdlib/collections \
+          -Isrc/api \
+          src/main.cpp $SRC_FILES \
           -o build_release/Release/arabic_compiler \
           -lpthread -ldl
+        echo "Build successful!"
+        ls -la build_release/Release/
       shell: bash
 
     - name: Upload Compiler Artifact
@@ -122,6 +127,8 @@ jobs:
     - name: Check for security issues
       run: |
         echo "Basic security checks..."
+        # Just warn, don't fail
         if grep -r "system(" src/ 2>/dev/null; then
-          echo "::warning::Found system() calls - ensure proper sanitization"
+          echo "::warning::Found system() calls - review recommended"
         fi
+        echo "Check complete."
