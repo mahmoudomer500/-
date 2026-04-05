@@ -34,7 +34,7 @@ jobs:
           Where-Object { $excludeNames -notcontains $_.Name } |
           Select-Object -ExpandProperty FullName
         # Add ArabicComputerVision.cpp for WindowManager::pumpMessages()
-        $cppFiles += "src/modules/ai/ArabicComputerVision.cpp"
+        $cppFiles += (Get-Item "src/modules/ai/ArabicComputerVision.cpp").FullName
         $cppFiles += "src/main.cpp"
         Write-Host "Compiling $($cppFiles.Count) files..."
         $includeDirs = @(
