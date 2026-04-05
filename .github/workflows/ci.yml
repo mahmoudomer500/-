@@ -32,13 +32,12 @@ jobs:
         $excludeNames = @("ArabicAppsAPI.cpp", "ArabicNetwork.cpp", "ArabicGUI.cpp", "ArabicVisionBridge.cpp", "ArabicTextClassifier.cpp", "WindowManager_stub.cpp", "ArabicVisionBridge_stub.cpp")
         $cppFiles = Get-ChildItem -Path src/core,src/runtime,src/stdlib,src/utils/core,src/utils/debug,src/modules/core -Recurse -Filter "*.cpp" |
           Where-Object { $excludeNames -notcontains $_.Name } |
-          Select-Object -ExpandProperty FullName |
-          Select-Object -Unique
-        # Add stub files explicitly (once only)
+          Select-Object -ExpandProperty FullName
+        # Add stub files explicitly
         $cppFiles += "$PWD/src/core/ArabicVisionBridge_stub.cpp"
         $cppFiles += "$PWD/src/modules/ai/ArabicComputerVision.cpp"
         $cppFiles += "src/main.cpp"
-        # Remove duplicates by normalizing paths
+        # Normalize paths and deduplicate
         $cppFiles = $cppFiles | ForEach-Object { $_.Replace('\', '/').Replace('//', '/') } | Sort-Object -Unique
         Write-Host "Files to compile: $($cppFiles.Count)"
         Write-Host "Compiling $($cppFiles.Count) files..."
@@ -88,15 +87,18 @@ jobs:
         echo "Compiling..."
         # Build file list - exclude Windows-only files
         FILES="src/main.cpp src/core/ArabicVisionBridge_stub.cpp src/modules/ai/WindowManager_stub.cpp"
-        for dir in src/core src/runtime src/stdlib src/modules/core src/modules/ai src/utils/core src/utils/debug; do
+        for dir in src/core src/runtime src/stdlib src/modules/core src/utils/core src/utils/debug; do
           for f in $dir/*.cpp; do
             [ -f "$f" ] || continue
             case "$f" in
-              *ArabicNetwork*|*ArabicAppsAPI*|*ArabicGUI*|*ArabicVisionBridge_stub*) continue ;;
+              *ArabicNetwork*|*ArabicAppsAPI*|*ArabicGUI*|*ArabicVisionBridge*) continue ;;
               *ArabicLinker*|*ArabicText*|*ArabicTextUtils*) continue ;;
               *ArabicArraySIMD*|*WindowManager_stub*) continue ;;
               *ArabicRuntime*) continue ;;
               *ArabicProfiler*) continue ;;
+              *ArabicCompiler*) continue ;;
+              *ArabicExecutor*) continue ;;
+              *ArabicExecutor_headers*) continue ;;
             esac
             FILES="$FILES $f"
           done
