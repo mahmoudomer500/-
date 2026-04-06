@@ -1396,22 +1396,39 @@ void CodeGenerator::generateFunctionDefinition(const Command& cmd) {
     // MOV RBP, RSP
     this->emit(X64Encoder::MOV(Register::RBP, Register::RSP));
     
-    // 3. Allocate Stack Space for Local Variables
-    // We allocate 96 bytes to cover local vars and 'this' / parameters
-    this->emit(X64Encoder::SUB(Register::RSP, Operand::Imm(96)));
-    
-    // 4. Handle Parameters
-    int paramIndex = 0;
-    
+    // 3. Calculate required stack space dynamically
+    // Count parameters
     std::vector<std::string> paramNames;
     if (!cmd.parameters.empty()) {
         paramNames = cmd.parameters;
     } else {
-        // Fallback: extract from arguments if parameters is empty (lambdas)
         for (const auto& arg : cmd.arguments) {
             paramNames.push_back(arg->value);
         }
     }
+    int paramCount = (int)paramNames.size();
+    
+    // Calculate stack space needed:
+    // - 32 bytes shadow space (Windows x64 ABI)
+    // - 8 bytes per parameter beyond the first 4 (RCX, RDX, R8, R9)
+    // - 8 bytes per local variable (estimated from body commands)
+    // - Align to 16 bytes
+    int stackSpace = 32; // Shadow space
+    if (paramCount > 4) {
+        stackSpace += (paramCount - 4) * 8;
+    }
+    // Estimate local variables from body (rough estimate: 16 vars max)
+    stackSpace += 16 * 8; // 128 bytes for local variables
+    // Align to 16 bytes
+    stackSpace = (stackSpace + 15) & ~15;
+    
+    // 4. Allocate Stack Space for Local Variables
+    if (stackSpace > 0) {
+        this->emit(X64Encoder::SUB(Register::RSP, Operand::Imm(stackSpace)));
+    }
+    
+    // 5. Handle Parameters
+    int paramIndex = 0;
 
     for (const auto& paramName : paramNames) {
         // Add parameter as variable in NEW scope

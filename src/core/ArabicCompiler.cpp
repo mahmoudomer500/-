@@ -411,13 +411,16 @@ namespace ArabicLanguage {
     }
 
     bool ArabicCompiler::executeIntermediate(const std::string& arabicCode) {
+        std::cerr << "[DEBUG] executeIntermediate called, code size: " << arabicCode.size() << std::endl;
         try {
             std::shared_ptr<ArabicRuntime> runtime;
             if (persistentRuntime) {
                 runtime = persistentRuntime;
             } else {
                 runtime = std::make_shared<ArabicRuntime>();
+                std::cerr << "[DEBUG] Creating runtime..." << std::endl;
                 runtime->initialize();
+                std::cerr << "[DEBUG] Runtime initialized" << std::endl;
             }
 
             // ✅ تسجيل مكتبة الرؤية الحاسوبية
@@ -429,16 +432,14 @@ namespace ArabicLanguage {
             // ✅ تمرير دالة المخرجات إذا كانت محددة
             if (outputCallback) {
                 currentExecutor->setOutputCallback(outputCallback);
-                
             }
 
+            std::cerr << "[DEBUG] Parsing code..." << std::endl;
             std::vector<std::shared_ptr<Command>> commands;
             if (useBridges && bridgeManager.isReady()) {
-                if (outputCallback) 
                 commands = bridgeManager.callParser(arabicCode, generator.getSymbols());
                 
                 if (commands.empty()) {
-                    if (outputCallback) 
                     parser.setExecutor(currentExecutor.get());
                     commands = parser.parse(arabicCode, generator.getSymbols());
                 }
@@ -448,21 +449,19 @@ namespace ArabicLanguage {
                 commands = parser.parse(arabicCode, generator.getSymbols());
             }
 
-            if (outputCallback) {
-                
-            }
+            std::cerr << "[DEBUG] Parser generated " << commands.size() << " commands" << std::endl;
 
+            std::cerr << "[DEBUG] Executing commands..." << std::endl;
             currentExecutor->execute(commands);
 
             if (outputCallback) {
                 if (currentExecutor->isStopped()) {
                     outputCallback("⚠️ تم إيقاف التنفيذ بواسطة المستخدم.\n");
-                } else {
-                    
                 }
             }
             
             currentExecutor.reset(); // تنظيف بعد الانتهاء
+            std::cerr << "[DEBUG] executeIntermediate finished successfully" << std::endl;
             return true;
         } catch (const std::exception& e) {
             std::cerr << "❌ حدث خطأ أثناء التشغيل: " << e.what() << std::endl;

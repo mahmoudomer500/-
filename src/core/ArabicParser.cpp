@@ -18,38 +18,91 @@ namespace ArabicLanguage {
         
         // ✅ إصلاح: معالجة النصوص متعددة الأسطر قبل التقسيم
         // نجمع الأسطر التي تكون داخل نص مفتوح (عدد علامات " غير زوجي)
-        std::stringstream ss(sourceCode);
-        std::string line;
-        std::vector<std::string> lines;
-        std::string pendingLine = "";
-        bool inMultilineString = false;
+        std::string code = sourceCode;
+        // Skip UTF-8 BOM if present
+        if (code.size() >= 3 && 
+            static_cast<unsigned char>(code[0]) == 0xEF &&
+            static_cast<unsigned char>(code[1]) == 0xBB &&
+            static_cast<unsigned char>(code[2]) == 0xBF) {
+            code = code.substr(3);
+        }
 
-        while (std::getline(ss, line)) {
-            // عدّ علامات الاقتباس غير المهروبة لتحديد حالة النص
-            bool escaped = false;
-            for (char c : line) {
-                if (escaped) { escaped = false; continue; }
-                if (c == '\\') { escaped = true; continue; }
-                if (c == '"') inMultilineString = !inMultilineString;
+        // ✅ فحص الأقواس المتوازنة أولاً مع رقم السطر
+        int parenDepth = 0;
+        int braceDepth = 0;
+        int errorLineNum = 1;
+        for (size_t i = 0; i < code.size(); i++) {
+            char c = code[i];
+            if (c == '\n') errorLineNum++;
+            else if (c == '(') parenDepth++;
+            else if (c == ')') parenDepth--;
+            else if (c == '{') braceDepth++;
+            else if (c == '}') braceDepth--;
+            
+            if (parenDepth < 0) {
+                std::cerr << "❌ خطأ في السطر " << errorLineNum << ": قوس ')' زائد" << std::endl;
+                return commands;
             }
-
-            if (inMultilineString) {
-                // مازلنا داخل نص متعدد الأسطر — نضم السطر
-                pendingLine += line + "\\n";
-            } else {
-                if (!pendingLine.empty()) {
-                    // أنهينا النص المتعدد الأسطر — نضم السطر الأخير وندفعهم معاً
-                    pendingLine += line;
-                    lines.push_back(pendingLine);
-                    pendingLine = "";
-                } else {
-                    lines.push_back(line);
-                }
+            if (braceDepth < 0) {
+                std::cerr << "❌ خطأ في السطر " << errorLineNum << ": قوس '}' زائد" << std::endl;
+                return commands;
             }
         }
-        // إذا بقي سطر معلق (نص لم يُغلق)، ندفعه كما هو
-        if (!pendingLine.empty()) {
-            lines.push_back(pendingLine);
+        if (parenDepth > 0) {
+            std::cerr << "❌ خطأ: قوس '(' غير مغلق — يوجد " << parenDepth << " قوس/أقواس مفتوحة بدون إغلاق" << std::endl;
+            return commands;
+        }
+        if (braceDepth > 0) {
+            std::cerr << "❌ خطأ: قوس '{' غير مغلق — يوجد " << braceDepth << " قوس/أقواس مفتوحة بدون إغلاق" << std::endl;
+            return commands;
+        }
+
+        // Split by newlines manually (avoid getline issues with UTF-8)
+        std::vector<std::string> lines;
+        std::string currentLine;
+        bool inMultilineString = false;
+        std::string pendingLine;
+
+        for (size_t i = 0; i < code.size(); i++) {
+            char c = code[i];
+            if (c == '\r') continue; // Skip CR
+            if (c == '\n') {
+                // Count quotes in this line
+                int quoteCount = 0;
+                bool escaped = false;
+                for (char lc : currentLine) {
+                    if (escaped) { escaped = false; continue; }
+                    if (lc == '\\') { escaped = true; continue; }
+                    if (lc == '"') quoteCount++;
+                }
+                
+                if (inMultilineString) {
+                    pendingLine += currentLine + "\n";
+                    if (quoteCount % 2 == 1) {
+                        inMultilineString = false;
+                        lines.push_back(pendingLine);
+                        pendingLine = "";
+                    }
+                } else {
+                    lines.push_back(currentLine);
+                    if (quoteCount % 2 == 1) {
+                        inMultilineString = true;
+                        pendingLine = currentLine + "\n";
+                    }
+                }
+                currentLine.clear();
+            } else {
+                currentLine += c;
+            }
+        }
+        // Handle last line
+        if (!currentLine.empty()) {
+            if (inMultilineString) {
+                pendingLine += currentLine;
+                lines.push_back(pendingLine);
+            } else {
+                lines.push_back(currentLine);
+            }
         }
 
         size_t index = 0;
@@ -66,10 +119,49 @@ namespace ArabicLanguage {
                     index++;
                 }
             } catch (const std::exception& e) {
-                std::cerr << "Error parsing line " << indexBefore + 1 << ": " << e.what() << std::endl;
+                std::cerr << "❌ خطأ في السطر " << (indexBefore + 1) << ": " << e.what() << std::endl;
                 if (index == indexBefore) index++;
             }
         }
+        
+        // ✅ فحص: هل هناك كتل مفتوحة لم تُغلق؟ مع رقم السطر
+        int blockDepth = 0;
+        int unclosedLine = 0;
+        std::vector<std::pair<std::string, int>> blockNames; // name + line
+        for (int lineIdx = 0; lineIdx < (int)lines.size(); lineIdx++) {
+            std::string trimmed = lines[lineIdx];
+            trimmed.erase(0, trimmed.find_first_not_of(" \t\r\n"));
+            if (trimmed.empty() || trimmed[0] == '#') continue;
+            
+            if (trimmed.find("دالة ") == 0 || trimmed.find("إذا ") == 0 || 
+                trimmed.find("بينما ") == 0 || trimmed.find("لكل ") == 0 ||
+                trimmed.find("صنف ") == 0 || trimmed.find("صف ") == 0 ||
+                trimmed.find("حاول ") == 0) {
+                blockDepth++;
+                // استخراج اسم الكتلة
+                size_t spacePos = trimmed.find(' ');
+                if (spacePos != std::string::npos) {
+                    size_t parenPos = trimmed.find('(', spacePos);
+                    if (parenPos != std::string::npos) {
+                        blockNames.push_back({trimmed.substr(spacePos + 1, parenPos - spacePos - 1), lineIdx + 1});
+                    } else {
+                        blockNames.push_back({trimmed.substr(spacePos + 1), lineIdx + 1});
+                    }
+                }
+            } else if (trimmed == "نهاية") {
+                blockDepth--;
+                if (!blockNames.empty()) blockNames.pop_back();
+            }
+        }
+        
+        if (blockDepth > 0) {
+            std::cerr << "⚠️ تحذير: يوجد " << blockDepth << " كتلة/كتل بدون 'نهاية':" << std::endl;
+            for (const auto& pair : blockNames) {
+                std::cerr << "   - " << pair.first << " (السطر " << pair.second << ")" << std::endl;
+            }
+            std::cerr << "💡 تأكد من إضافة 'نهاية' بعد كل دالة، شرط، حلقة، أو صنف" << std::endl;
+        }
+        
         std::cerr << "[DEBUG] Parser generated " << commands.size() << " commands" << std::endl;
         for (size_t i = 0; i < commands.size(); i++) {
             std::cerr << "[DEBUG]   cmd[" << i << "].type=" << (int)commands[i]->type 

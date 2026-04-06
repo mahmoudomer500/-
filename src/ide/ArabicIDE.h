@@ -93,6 +93,16 @@ private:
     int  debugLine     = -1;      // السطر الحالي في التصحيح
     std::set<int> breakpointLines; // أرقام السطور التي بها نقاط توقف
     
+    // ✅ متغيرات التصحيح في الوقت الفعلي
+    std::vector<std::shared_ptr<Command>> debugCommands;
+    size_t debugCommandIndex = 0;
+    std::shared_ptr<ArabicRuntime> debugRuntime;
+    std::shared_ptr<ArabicExecutor> debugExecutor;
+    
+    // ✅ نقاط البداية والنهاية للتصحيح
+    int debugStartLine = -1;  // نقطة البداية (F9)
+    int debugEndLine = -1;    // نقطة النهاية (Shift+F9)
+    
     // الملفات
     std::string currentFilePath;
     std::string currentFileName;
@@ -169,6 +179,9 @@ public:
     void stepDebug();
     void stepOverDebug();
     void toggleBreakpoint();          // F9 - نقطة توقف عند السطر الحالي
+    void setDebugStartPoint();        // Ctrl+F9 - نقطة بداية التصحيح
+    void setDebugEndPoint();          // Ctrl+Shift+F9 - نقطة نهاية التصحيح
+    void runToStartPoint();           // Ctrl+F5 - تشغيل حتى نقطة البداية
     void showBreakpoints();
     void highlightDebugLine(int line);
 

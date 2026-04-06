@@ -343,6 +343,9 @@ Value ArabicExecutor::executeFor(const std::shared_ptr<Command>& cmd) {
     double step = 1.0;
     if (!cmd->arguments.empty()) step = valueToNumber(evaluateExpression(*cmd->arguments[0]));
 
+    // ✅ Safety: Prevent infinite loops if step is 0 or extremely small
+    if (std::abs(step) < 1e-9) step = (start <= end) ? 1.0 : -1.0;
+
     // Use a helper to convert double to string without trailing zeros if it's an integer
     auto doubleToString = [](double d) {
         std::string s = std::to_string(d);
@@ -1716,6 +1719,12 @@ Value ArabicExecutor::evaluateArrayAccess(const Value& expr) {
         int idx = static_cast<int>(valueToNumber(idxVal));
         if (idx < 0 || static_cast<size_t>(idx) >= arr.elements.size()) return Value(ValueType::NONE);
         return arr.elements[idx];
+    } else if (arr.type == ValueType::STRING) {
+        int idx = static_cast<int>(valueToNumber(idxVal));
+        ArabicTextUtils utils;
+        size_t totalLen = utils.utf8Length(arr.string_value);
+        if (idx < 0 || static_cast<size_t>(idx) >= totalLen) return Value(ValueType::NONE);
+        return Value(ValueType::STRING, utils.utf8Substring(arr.string_value, idx, 1));
     }
     
     // Handle String access
@@ -2125,8 +2134,8 @@ void ArabicExecutor::optimizeHotFunctions() {
     }
 
     bool ArabicExecutor::validateArrayAccess(const Value& array, int index) const {
-        if (array.type != ValueType::ARRAY && array.type != ValueType::GENERIC_LIST) {
-            throwError("المتغير ليس مصفوفة أو قائمة");
+        if (array.type != ValueType::ARRAY && array.type != ValueType::GENERIC_LIST && array.type != ValueType::STRING) {
+            throwError("المتغير ليس مصفوفة أو قائمة أو نصاً");
             return false;
         }
 
@@ -2136,6 +2145,7 @@ void ArabicExecutor::optimizeHotFunctions() {
         }
 
         size_t size = (array.type == ValueType::ARRAY) ? array.elements.size() :
+                     (array.type == ValueType::STRING) ? ArabicTextUtils().utf8Length(array.string_value) :
                      getGenericListSize(array);
 
         if (static_cast<size_t>(index) >= size) {

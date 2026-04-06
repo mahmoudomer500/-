@@ -2,6 +2,9 @@
 // Arabic Integrated Development Environment Implementation
 
 #include "ArabicIDE.h"
+#include "../core/ArabicRuntime.h"
+#include "../core/ArabicExecutor.h"
+#include "../core/ArabicParser.h"
 #include <fstream>
 #include <sstream>
 #include <commctrl.h>
@@ -1112,9 +1115,23 @@ void ArabicIDE::showHelpDialog() {
             L"  أداة تتيح لك تتبع تنفيذ كودك سطراً بسطر\n"
             L"  ومراقبة قيم المتغيرات في كل خطوة.\n\n"
 
-            L"🚀 خطوات استخدام المصحح:\n"
+            L"🚀 كيف يعمل التصحيح (مثال عملي):\n"
+            L"  ──────────────────────────────────────\n"
+            L"  الكود:\n"
+            L"    اطبع(\"مرحباً\")\n"
+            L"    مت العمر = 25\n"
+            L"    اطبع(العمر)\n"
+            L"  ──────────────────────────────────────\n\n"
+            L"  الخطوة    السطر المميز    ما يحدث فعلياً    المخرجات\n"
+            L"  ─────────────────────────────────────────────────\n"
+            L"  F5(بدء)   السطر 1        يطبع \"مرحباً\"      مرحباً\n"
+            L"  F10(خطوة) السطر 2        يخزن 25 في العمر   (لا شيء)\n"
+            L"  F10(خطوة) السطر 3        يطبع قيمة العمر    25\n"
+            L"  F10(خطوة) نهاية          انتهى البرنامج     ✅ انتهى\n\n"
+
+            L"🎯 طريقة الاستخدام:\n"
             L"  1️⃣  احفظ ملفك أولاً  (Ctrl+S)\n"
-            L"  2️⃣  ضع نقطة توقف عند السطر المطلوب  (F9)\n"
+            L"  2️⃣  ضع نقطة بداية ونهاية  (F9)\n"
             L"      ← السطر يُمييَّز بـ 🔴 في المخرجات\n"
             L"  3️⃣  ابدأ التصحيح  (قائمة تصحيح > بدء التصحيح)\n"
             L"      ← سيتوقف البرنامج عند أول نقطة توقف\n"
@@ -1129,7 +1146,7 @@ void ArabicIDE::showHelpDialog() {
             L"  F11          تنفيذ سطر (الدخول في الدوال)\n"
             L"  Shift+F5     إيقاف التصحيح\n\n"
 
-            L"💡 مثال عملي - ضع نقاط توقف في هذا الكود:\n"
+            L"💡 مثال عملي - ضع نقاط توقف:\n"
             L"  ──────────────────────────────────────\n"
             L"  دالة احسب_مجموع(أ، ب):\n"
             L"      النتيجة = أ + ب          ← F9 هنا\n"
@@ -1149,8 +1166,9 @@ void ArabicIDE::showHelpDialog() {
             L"  ← تظهر في لوحة المخرجات بالأسفل\n\n"
 
             L"🎯 نصائح احترافية:\n"
-            L"  • ضع نقاط توقف قبل الأجزاء التي تشك فيها\n"
-            L"  • استخدم F11 لفحص ما يجري داخل الدوال\n"
+            L"  • ضع نقطة بداية عند أول السطر المشكوك فيه\n"
+            L"  • ضع نقطة نهاية عند آخر سطر تريد فحصه\n"
+            L"  • استخدم F10 للتنقل بينهما سطراً بسطر\n"
             L"  • راقب لوحة المخرجات لرؤية تقدم التنفيذ",
             L"🔧 دليل المصحح (Debugger)",
             MB_OK | MB_ICONINFORMATION);
@@ -1811,13 +1829,57 @@ void ArabicIDE::startDebugging() {
     }
 
     isDebugging = true;
+    debugCommandIndex = 0;
+    
+    // ✅ تحليل الملف وتخزين الأوامر
+    std::string content;
+    std::ifstream file(currentFilePath);
+    if (file.is_open()) {
+        std::stringstream buffer;
+        buffer << file.rdbuf();
+        content = buffer.str();
+        file.close();
+    }
+    
+    if (!content.empty()) {
+        ArabicParser parser;
+        SymbolTable symbols;
+        debugCommands = parser.parse(content, symbols);
+        
+        if (!debugCommands.empty()) {
+            // ✅ إنشاء بيئة تشغيل ومنفذ منفصلين للتصحيح
+            debugRuntime = std::make_shared<ArabicRuntime>();
+            debugRuntime->initialize();
+            debugExecutor = std::make_shared<ArabicExecutor>(debugRuntime);
+            debugExecutor->resetStop();
+            
+            addOutput(OutputMessage(OutputMessage::SUCCESS,
+                "▶ بدأ التصحيح: " + std::to_string(debugCommands.size()) + " أمر"));
+            
+            // ✅ تنفيذ أول أمر
+            debugCommandIndex = 0;
+            try {
+                debugExecutor->executeCommand(debugCommands[0]);
+                debugCommandIndex = 1;
+                debugLine = 1;
+                highlightDebugLine(debugLine);
+                addOutput(OutputMessage(OutputMessage::INFO,
+                    "📍 السطر 1: تم التنفيذ"));
+            } catch (const std::exception& e) {
+                addOutput(OutputMessage(OutputMessage::ERROR_MSG,
+                    "❌ خطأ في السطر 1: " + std::string(e.what())));
+            }
+        } else {
+            addOutput(OutputMessage(OutputMessage::WARNING,
+                "⚠️ لم يتم تحليل أي أوامر من الملف"));
+            isDebugging = false;
+            return;
+        }
+    }
+    
     debugger->initialize();
     debugger->startDebugging(currentFilePath);
-    debugLine = 1;
-    highlightDebugLine(debugLine);
 
-    addOutput(OutputMessage(OutputMessage::SUCCESS,
-        "▶ بدأ التصحيح للملف: " + currentFilePath));
     addOutput(OutputMessage(OutputMessage::INFO,
         "💡 F10 = سطر تالٍ  |  F11 = دخول دالة  |  F9 = نقطة توقف  |  Shift+F5 = إيقاف"));
     updateStatusBar("🔧 وضع التصحيح - السطر 1");
@@ -1827,6 +1889,12 @@ void ArabicIDE::stopDebugging() {
     if (!debugger) return;
     isDebugging = false;
     debugLine   = -1;
+    debugCommandIndex = 0;
+    debugCommands.clear();
+    debugRuntime.reset();
+    debugExecutor.reset();
+    debugStartLine = -1;
+    debugEndLine = -1;
     debugger->stopDebugging();
 
     // إزالة تمييز سطر التصحيح
@@ -1837,23 +1905,56 @@ void ArabicIDE::stopDebugging() {
 }
 
 void ArabicIDE::stepDebug() {
-    if (!debugger || !isDebugging) {
+    if (!isDebugging || !debugExecutor) {
         addOutput(OutputMessage(OutputMessage::WARNING,
             "⚠️ ابدأ التصحيح أولاً (قائمة تصحيح > بدء التصحيح)"));
         return;
     }
-    debugger->stepOver();
-    debugLine = debugger->getCurrentLine();
-    highlightDebugLine(debugLine);
-    updateStatusBar("🔧 التصحيح - السطر " + std::to_string(debugLine));
+    
+    // ✅ تحقق من نقطة النهاية
+    if (debugEndLine > 0 && debugLine >= debugEndLine) {
+        addOutput(OutputMessage(OutputMessage::SUCCESS,
+            "✅ وصلت نقطة النهاية (السطر " + std::to_string(debugEndLine) + ")"));
+        stopDebugging();
+        return;
+    }
+    
+    if (debugCommandIndex >= debugCommands.size()) {
+        addOutput(OutputMessage(OutputMessage::SUCCESS, "✅ انتهى البرنامج"));
+        stopDebugging();
+        return;
+    }
+    
+    // ✅ تحقق من نقاط التوقف
+    int nextLine = debugCommandIndex + 1;
+    if (breakpointLines.count(nextLine)) {
+        addOutput(OutputMessage(OutputMessage::INFO,
+            "🔴 نقطة توقف عند السطر " + std::to_string(nextLine)));
+    }
+    
+    // ✅ تنفيذ الأمر التالي
+    try {
+        debugExecutor->executeCommand(debugCommands[debugCommandIndex]);
+        debugCommandIndex++;
+        debugLine = debugCommandIndex + 1;
+        highlightDebugLine(debugLine);
+        updateStatusBar("🔧 التصحيح - السطر " + std::to_string(debugLine) +
+            (debugEndLine > 0 ? " / نهاية: " + std::to_string(debugEndLine) : ""));
+        
+        if (debugCommandIndex >= debugCommands.size()) {
+            addOutput(OutputMessage(OutputMessage::SUCCESS, "✅ انتهى البرنامج"));
+            stopDebugging();
+        }
+    } catch (const std::exception& e) {
+        addOutput(OutputMessage(OutputMessage::ERROR_MSG,
+            "❌ خطأ في السطر " + std::to_string(debugLine) + ": " + std::string(e.what())));
+        stopDebugging();
+    }
 }
 
 void ArabicIDE::stepOverDebug() {
-    if (!debugger || !isDebugging) return;
-    debugger->stepInto();
-    debugLine = debugger->getCurrentLine();
-    highlightDebugLine(debugLine);
-    updateStatusBar("🔧 التصحيح (داخل دالة) - السطر " + std::to_string(debugLine));
+    // نفس stepDebug مؤقتاً - يمكن تحسينه لاحقاً للدخول في الدوال
+    stepDebug();
 }
 
 void ArabicIDE::toggleBreakpoint() {
@@ -1876,6 +1977,100 @@ void ArabicIDE::toggleBreakpoint() {
         breakpointLines.insert(lineNum);
         addOutput(OutputMessage(OutputMessage::INFO,
             "🔴 نقطة توقف عند السطر " + std::to_string(lineNum)));
+    }
+}
+
+void ArabicIDE::setDebugStartPoint() {
+    if (currentFilePath.empty()) {
+        addOutput(OutputMessage(OutputMessage::WARNING, "⚠️ احفظ الملف أولاً"));
+        return;
+    }
+    DWORD selStart = 0;
+    SendMessage(editControl, EM_GETSEL, (WPARAM)&selStart, 0);
+    int lineNum = (int)SendMessage(editControl, EM_LINEFROMCHAR, selStart, 0) + 1;
+    debugStartLine = lineNum;
+    addOutput(OutputMessage(OutputMessage::INFO,
+        "🟢 نقطة بداية التصحيح: السطر " + std::to_string(lineNum)));
+    updateStatusBar("🔧 بداية: سطر " + std::to_string(debugStartLine) +
+        (debugEndLine > 0 ? " | نهاية: سطر " + std::to_string(debugEndLine) : ""));
+}
+
+void ArabicIDE::setDebugEndPoint() {
+    if (currentFilePath.empty()) {
+        addOutput(OutputMessage(OutputMessage::WARNING, "⚠️ احفظ الملف أولاً"));
+        return;
+    }
+    DWORD selStart = 0;
+    SendMessage(editControl, EM_GETSEL, (WPARAM)&selStart, 0);
+    int lineNum = (int)SendMessage(editControl, EM_LINEFROMCHAR, selStart, 0) + 1;
+    debugEndLine = lineNum;
+    addOutput(OutputMessage(OutputMessage::INFO,
+        "🔴 نقطة نهاية التصحيح: السطر " + std::to_string(lineNum)));
+    updateStatusBar("🔧 بداية: سطر " + std::to_string(debugStartLine > 0 ? debugStartLine : 1) +
+        " | نهاية: سطر " + std::to_string(debugEndLine));
+}
+
+void ArabicIDE::runToStartPoint() {
+    if (debugStartLine <= 0) {
+        addOutput(OutputMessage(OutputMessage::WARNING,
+            "⚠️ حدد نقطة بداية أولاً (Ctrl+F9 عند السطر المطلوب)"));
+        return;
+    }
+    
+    // احفظ الملف أولاً
+    if (hasUnsavedChanges) saveFile();
+    
+    isDebugging = true;
+    debugCommandIndex = 0;
+    
+    // تحليل الملف
+    std::string content;
+    std::ifstream file(currentFilePath);
+    if (file.is_open()) {
+        std::stringstream buffer;
+        buffer << file.rdbuf();
+        content = buffer.str();
+        file.close();
+    }
+    
+    if (!content.empty()) {
+        ArabicParser parser;
+        SymbolTable symbols;
+        debugCommands = parser.parse(content, symbols);
+        
+        if (!debugCommands.empty()) {
+            debugRuntime = std::make_shared<ArabicRuntime>();
+            debugRuntime->initialize();
+            debugExecutor = std::make_shared<ArabicExecutor>(debugRuntime);
+            debugExecutor->resetStop();
+            
+            addOutput(OutputMessage(OutputMessage::SUCCESS,
+                "▶ تشغيل حتى السطر " + std::to_string(debugStartLine) +
+                " من أصل " + std::to_string(debugCommands.size()) + " أمر"));
+            
+            // تنفيذ الأوامر حتى نقطة البداية
+            int currentLine = 1;
+            while (debugCommandIndex < debugCommands.size() && currentLine < debugStartLine) {
+                try {
+                    debugExecutor->executeCommand(debugCommands[debugCommandIndex]);
+                    debugCommandIndex++;
+                    currentLine++;
+                } catch (const std::exception& e) {
+                    addOutput(OutputMessage(OutputMessage::ERROR_MSG,
+                        "❌ خطأ في السطر " + std::to_string(currentLine) + ": " + std::string(e.what())));
+                    stopDebugging();
+                    return;
+                }
+            }
+            
+            // التوقف عند نقطة البداية
+            debugLine = debugStartLine;
+            highlightDebugLine(debugLine);
+            addOutput(OutputMessage(OutputMessage::INFO,
+                "🟢 توقف عند نقطة البداية (السطر " + std::to_string(debugStartLine) + ")"));
+            updateStatusBar("🔧 التصحيح - السطر " + std::to_string(debugLine) +
+                (debugEndLine > 0 ? " / نهاية: " + std::to_string(debugEndLine) : ""));
+        }
     }
 }
 

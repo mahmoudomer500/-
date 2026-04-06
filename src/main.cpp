@@ -934,14 +934,19 @@ void handleMemoryManagement() {
 // ══════════════════════════════════════════════════════════════
 
 int main(int argc, char* argv[]) {
+    std::cerr << "[DEBUG] main() started, argc=" << argc << std::endl;
     // إعداد ترميز UTF-8
 #ifdef _WIN32
+    std::cerr << "[DEBUG] About to call chcp" << std::endl;
     system("chcp 65001 > nul");
+    std::cerr << "[DEBUG] chcp done" << std::endl;
 #endif
 
     // التحقق من وضع سطر الأوامر باستخدام --mode (يجب أن يكون أولاً)
+    std::cerr << "[DEBUG] Checking argc=" << argc << std::endl;
     if (argc > 2 && string(argv[1]) == "--mode") {
         string mode = argv[2];
+        std::cerr << "[DEBUG] Mode: " << mode << std::endl;
 
 #ifdef HAS_ARABIC_ASSEMBLER
         if (mode == "assembler" && argc > 3) {
@@ -1002,6 +1007,7 @@ int main(int argc, char* argv[]) {
         }
         if (mode == "run" && argc > 3) {
             string inputFile = argv[3];
+            std::cerr << "[DEBUG] Running file: " << inputFile << std::endl;
             ArabicCompiler compiler;
             
             // Set output callback to see debug logs
@@ -1010,7 +1016,10 @@ int main(int argc, char* argv[]) {
             });
             
             string content;
+            std::cerr << "[DEBUG] Reading file..." << std::endl;
             if (!compiler.readArabicFile(inputFile, content)) return 1;
+            std::cerr << "[DEBUG] File read, size: " << content.size() << " bytes" << std::endl;
+            std::cerr << "[DEBUG] Content preview: " << content.substr(0, std::min((size_t)50, content.size())) << std::endl;
             bool ok = compiler.executeIntermediate(content);
             return ok ? 0 : 1;
         }
