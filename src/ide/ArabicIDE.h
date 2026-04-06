@@ -174,6 +174,9 @@ public:
     void applySyntaxHighlighting();
     void analyzeCodeErrors();
     void updateLineNumbers();  // ✅ تحديث أرقام الأسطر
+    void syncLineNumberScroll(); // ✅ مزامنة تمرير أرقام الأسطر
+    static LRESULT CALLBACK LineNumberSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
+    static WNDPROC g_origEditProc;  // ✅ الإجراء الأصلي للمحرر
 
     // ✅ وظائف المصحح (Debugger)
     void startDebugging();

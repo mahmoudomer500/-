@@ -12,26 +12,35 @@
 #include <shellapi.h>
 #include <richedit.h>
 #include <algorithm>
-#include <thread>
-#include <atomic>
-
-#pragma comment(lib, "comctl32.lib")
-#pragma comment(lib, "comdlg32.lib")
-
-#include "ArabicIDE.h"
-#include "../modules/ui/ArabicCodeEditor.h" // للتلوين والتحليل
-#include "../core/PackageManager.h"
-#include "../core/ArabicJITCompiler.h"
-#include "../utils/debug/InteractiveDebugger.h"
-#include <iostream>
-#include <fstream>
-#include <sstream>
-#include <vector>
 #include <map>
-#include <memory>
-#include <string>
 
 namespace ArabicLanguage {
+
+// مؤشر للنافذة الرئيسية (يُعرَّف قبل subclass proc)
+static ArabicIDE* g_pIDE = nullptr;
+
+// ✅ متغير عام للإجراء الأصلي للمحرر
+WNDPROC ArabicIDE::g_origEditProc = nullptr;
+
+LRESULT CALLBACK ArabicIDE::LineNumberSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    if (g_pIDE) {
+        switch (msg) {
+            case WM_KEYUP:
+            case WM_CHAR:
+                if (g_pIDE->lineNumberControl) {
+                    g_pIDE->updateLineNumbers();
+                }
+                break;
+            case WM_VSCROLL:
+            case WM_MOUSEWHEEL:
+                if (g_pIDE->lineNumberControl) {
+                    g_pIDE->syncLineNumberScroll();
+                }
+                break;
+        }
+    }
+    return CallWindowProc(g_origEditProc, hwnd, msg, wParam, lParam);
+}
 
 // أمثلة الكود الجاهزة
 static const std::vector<std::pair<std::string, std::string>> CODE_EXAMPLES = {
@@ -527,7 +536,6 @@ R"EXAMPLE(// اختبار شامل لجميع المكتبات
 };
 
 // مؤشر للنافذة الرئيسية
-static ArabicIDE* g_pIDE = nullptr;
 
 ArabicIDE::ArabicIDE()
     : state(IDEState::STATE_IDLE)
@@ -769,6 +777,9 @@ void ArabicIDE::createEditor() {
     
     // السماح بالكتابة
     SendMessage(editControl, EM_SETREADONLY, FALSE, 0);
+    
+    // ✅ ربط المحرر بـ subclass لتحديث أرقام الأسطر أثناء الكتابة والتمرير
+    g_origEditProc = (WNDPROC)SetWindowLongPtrW(editControl, GWLP_WNDPROC, (LONG_PTR)LineNumberSubclassProc);
     
     // تحديث أرقام الأسطر الأولية
     updateLineNumbers();
@@ -2170,10 +2181,27 @@ void ArabicIDE::updateLineNumbers() {
     
     SetWindowTextW(lineNumberControl, lineNumbers.c_str());
     
-    HFONT hFont = CreateFontW(18, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-        ARABIC_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY,
-        DEFAULT_PITCH | FF_DONTCARE, L"Consolas");
-    SendMessage(lineNumberControl, WM_SETFONT, (WPARAM)hFont, TRUE);
+    // تعيين الخط إذا لم يكن معيناً
+    static HFONT hLineFont = nullptr;
+    if (!hLineFont) {
+        hLineFont = CreateFontW(18, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+            ARABIC_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY,
+            DEFAULT_PITCH | FF_DONTCARE, L"Consolas");
+    }
+    SendMessage(lineNumberControl, WM_SETFONT, (WPARAM)hLineFont, FALSE);
+}
+
+void ArabicIDE::syncLineNumberScroll() {
+    if (!editControl || !lineNumberControl) return;
+    
+    // الحصول على موضع التمرير الرأسي للمحرر
+    int scrollPos = (int)SendMessage(editControl, EM_GETFIRSTVISIBLELINE, 0, 0);
+    
+    // تمرير أرقام الأسطر لنفس الموضع
+    SendMessage(lineNumberControl, WM_VSCROLL, MAKEWPARAM(SB_THUMBPOSITION, scrollPos), 0);
+    
+    // تحديث الأرقام (في حالة تغير عدد الأسطر)
+    updateLineNumbers();
 }
 
 // ════════════════════════════════════════════════════════════

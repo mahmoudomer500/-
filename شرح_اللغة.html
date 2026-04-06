@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تعلم لغة البرمجة العربية - رحلة المبرمج الصغير</title>
+    <!-- Google Fonts: Cairo & Outfit -->
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&family=Outfit:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #6c5ce7;
+            --secondary: #a29bfe;
+            --accent: #fab1a0;
+            --success: #00b894;
+            --bg-dark: #0f172a;
+            --card-bg: rgba(255, 255, 255, 0.05);
+            --text-light: #f8fafc;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Cairo', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-light);
+            overflow-x: hidden;
+            line-height: 1.6;
+        }
+
+        /* --- Animations --- */
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-20px); }
+            100% { transform: translateY(0px); }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* --- Layout --- */
+        header {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
+            position: relative;
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .hero-blob {
+            position: absolute;
+            width: 300px;
+            height: 300px;
+            background: var(--primary);
+            filter: blur(80px);
+            opacity: 0.3;
+            z-index: 0;
+            animation: float 6s ease-in-out infinite;
+        }
+
+        h1 {
+            font-size: 4rem;
+            font-weight: 900;
+            margin-bottom: 1rem;
+            background: linear-gradient(45deg, var(--primary), var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            z-index: 1;
+        }
+
+        .subtitle {
+            font-size: 1.5rem;
+            color: var(--secondary);
+            max-width: 600px;
+            z-index: 1;
+        }
+
+        .scroll-down {
+            margin-top: 3rem;
+            animation: float 2s infinite;
+            font-size: 2rem;
+            color: var(--accent);
+        }
+
+        main {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 4rem 2rem;
+        }
+
+        section {
+            margin-bottom: 6rem;
+            animation: fadeIn 1s ease-out;
+        }
+
+        h2 {
+            font-size: 2.5rem;
+            margin-bottom: 2rem;
+            border-right: 5px solid var(--primary);
+            padding-right: 1rem;
+            color: var(--accent);
+        }
+
+        p {
+            font-size: 1.2rem;
+            margin-bottom: 1.5rem;
+            color: #cbd5e1;
+        }
+
+        /* --- Cards & Glassmorphism --- */
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+        }
+
+        .card {
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 2rem;
+            transition: transform 0.3s ease, border-color 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card:hover {
+            transform: translateY(-10px);
+            border-color: var(--primary);
+        }
+
+        .card h3 {
+            font-size: 1.8rem;
+            margin-bottom: 1rem;
+            color: var(--primary);
+        }
+
+        .card-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            display: block;
+        }
+
+        /* --- Code Blocks --- */
+        .code-container {
+            background: #1e293b;
+            border-radius: 15px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            border-left: 5px solid var(--success);
+            font-family: 'Outfit', 'Courier New', monospace;
+            direction: rtl;
+            position: relative;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+
+        .code-tag {
+            position: absolute;
+            top: -10px;
+            left: 20px;
+            background: var(--success);
+            color: white;
+            padding: 2px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+
+        .keyword { color: #ff79c6; font-weight: bold; }
+        .string { color: #f1fa8c; }
+        .number { color: #bd93f9; }
+        .function { color: #50fa7b; }
+        .comment { color: #6272a4; font-style: italic; }
+
+        /* --- Badge --- */
+        .new-badge {
+            background: var(--accent);
+            color: black;
+            padding: 2px 8px;
+            border-radius: 5px;
+            font-size: 0.7rem;
+            font-weight: bold;
+            vertical-align: middle;
+            margin-right: 5px;
+        }
+
+        /* --- Footer --- */
+        footer {
+            text-align: center;
+            padding: 4rem;
+            background: #020617;
+            font-size: 1.1rem;
+            color: var(--secondary);
+        }
+
+        /* --- Responsive --- */
+        @media (max-width: 768px) {
+            h1 { font-size: 2.5rem; }
+            h2 { font-size: 1.8rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="hero-blob"></div>
+        <h1>مرحباً بك يا بطل! 🚀</h1>
+        <p class="subtitle">هل أنت مستعد لتتعلم كيف "تتكلم" مع الكمبيوتر بلغتنا العربية الجميلة؟ لغة البرمجة العربية هي بوابتك لعالم السحر الرقمي!</p>
+        <div class="scroll-down">👇</div>
+    </header>
+
+    <main>
+        <!-- Section 1: Intro -->
+        <section id="basics">
+            <h2>1. ما هي البرمجة؟ 🤔</h2>
+            <p>تخيل أن الكمبيوتر هو صديقك الآلي الذكي جداً، لكنه لا يفهم إلا أوامر محددة. البرمجة هي الطريقة التي نخبره بها ماذا يفعل، وبدلاً من تعلم "الإنجليزية" لنبرمج، اليوم سنبرمج بـ <b>لغة البرمجة العربية</b>!</p>
+            
+            <div class="card">
+                <h3>أول كود لك! ✅</h3>
+                <p>لنقل مرحباً للكمبيوتر:</p>
+                <div class="code-container">
+                    <span class="code-tag">بالعربي</span>
+                    <span class="function">اطبع</span>(<span class="string">"مرحباً بك في عالمي يا كمبيوتر!"</span>)
+                </div>
+                <p>ببساطة، كلمة <b>اطبع</b> تطلب من الكمبيوتر إظهار النص على الشاشة.</p>
+            </div>
+        </section>
+
+        <!-- Section 2: Variables -->
+        <section id="variables">
+            <h2>2. الصناديق العجيبة (المتغيرات) 📦</h2>
+            <p>المتغيرات هي مثل الصناديق التي نضع فيها ألعابنا أو أرقامنا لنستخدمها لاحقاً. نسميها "متغير" لأن ما بداخله يمكن أن يتغير!</p>
+            
+            <div class="card-grid">
+                <div class="card">
+                    <span class="card-icon">🔢</span>
+                    <h3>صندوق الأرقام</h3>
+                    <div class="code-container">
+                        <span class="keyword">مت</span> عدد_الألعاب = <span class="number">10</span><br>
+                        عدد_الألعاب = عدد_الألعاب + <span class="number">1</span>
+                    </div>
+                </div>
+                <div class="card">
+                    <span class="card-icon">✍️</span>
+                    <h3>صندوق الكلمات</h3>
+                    <div class="code-container">
+                        <span class="keyword">مت</span> اسم_البطل = <span class="string">"علي"</span><br>
+                        <span class="function">اطبع</span>(<span class="string">"أهلاً يا "</span> + اسم_البطل)
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 3: Decisions -->
+        <section id="decisions">
+            <h2>3. الكمبيوتر يتخذ قراراً! ⚖️</h2>
+            <p>هل تريد من الكمبيوتر أن يفعل شيئاً معيناً فقط في حالات خاصة؟ نستخدم <b>اذا</b>!</p>
+            
+            <div class="card">
+                <div class="code-container">
+                    <span class="keyword">مت</span> درجة_الحرارة = <span class="number">35</span><br><br>
+                    <span class="keyword">اذا</span> درجة_الحرارة > <span class="number">30</span>:<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;<span class="function">اطبع</span>(<span class="string">"الجو حار، لا تنسَ شرب الماء!"</span>)<br>
+                    <span class="keyword">وإلا</span>:<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;<span class="function">اطبع</span>(<span class="string">"الجو جميل اليوم!"</span>)<br>
+                    <span class="keyword">نهاية</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 4: Loops -->
+        <section id="loops">
+            <h2>4. التكرار المرح (الحلقات) 🔁</h2>
+            <p>بدلاً من كتابة كلمة "أحب البرمجة" مئة مرة، اطلب من الكمبيوتر فعل ذلك بذكاء!</p>
+            
+            <div class="card">
+                <div class="code-container">
+                    <span class="keyword">لكل</span> i <span class="keyword">في</span> <span class="function">النطاق</span>(<span class="number">1</span>, <span class="number">5</span>):<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;<span class="function">اطبع</span>(<span class="string">"أنا مبرمج بطل المرة رقم: "</span> + i)<br>
+                    <span class="keyword">نهاية</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 5: Latest Updates -->
+        <section id="advanced">
+            <h2>5. القوى الخارقة الجديدة! ⚡ <span class="new-badge">تحديث 2026</span></h2>
+            <p>لقد أصبح الكمبيوتر الآن أسرع وأذكى بفضل التحديثات الأخيرة! إليك ميزات المحترفين الصغار:</p>
+            
+            <div class="card-grid">
+                <div class="card">
+                    <span class="card-icon">🚀</span>
+                    <h3>السرعة القصوى (JIT)</h3>
+                    <p>المترجم الآن أصبح مثل "الفلاش"، يترجم الكود وينفذه في لمح البصر!</p>
+                </div>
+                <div class="card">
+                    <span class="card-icon">🤖</span>
+                    <h3>العمل الجماعي (Async)</h3>
+                    <p>يمكن للكمبيوتر الآن القيام بعدة مهام في وقت واحد (مثل تنزيل لعبة ولعب لعبة أخرى في نفس الوقت)!</p>
+                </div>
+                <div class="card">
+                    <span class="card-icon">🎨</span>
+                    <h3>الصناديق السحرية (Generics)</h3>
+                    <p>صناديق ذكية تفهم ما بداخلها تلقائياً وتتعامل معه بحرص.</p>
+                </div>
+                <div class="card">
+                    <span class="card-icon">🛠️</span>
+                    <h3>المفكر الذكي (Block Check)</h3>
+                    <p>إذا نسيت "إغلاق قوس" أو "نهاية" دالة، الكمبيوتر الآن يخبرك بالضبط في أي سطر حدث ذلك!</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Final Message -->
+        <section style="text-align: center;">
+            <h2 style="border: none;">هل أنت مستعد للبدء؟ 🎒</h2>
+            <p>افتح المحرر، اكتب أول <b>اطبع</b>، وشاهد السحر يحدث!</p>
+            <p style="font-size: 3rem;">💻✨🎮</p>
+        </section>
+    </main>
+
+    <footer>
+        <p>صُنع بكل ❤️ لنلهم مبرمجي المستقبل العربي</p>
+        <p>© 2026 لغة البرمجة العربية - رحلة المبرمج الصغير</p>
+    </footer>
+
+</body>
+</html>
