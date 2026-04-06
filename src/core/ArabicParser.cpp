@@ -40,21 +40,17 @@ namespace ArabicLanguage {
             else if (c == '}') braceDepth--;
             
             if (parenDepth < 0) {
-                std::cerr << "❌ خطأ في السطر " << errorLineNum << ": قوس ')' زائد" << std::endl;
-                return commands;
+                throw std::runtime_error("❌ خطأ في السطر " + std::to_string(errorLineNum) + ": قوس ')' زائد");
             }
             if (braceDepth < 0) {
-                std::cerr << "❌ خطأ في السطر " << errorLineNum << ": قوس '}' زائد" << std::endl;
-                return commands;
+                throw std::runtime_error("❌ خطأ في السطر " + std::to_string(errorLineNum) + ": قوس '}' زائد");
             }
         }
         if (parenDepth > 0) {
-            std::cerr << "❌ خطأ: قوس '(' غير مغلق — يوجد " << parenDepth << " قوس/أقواس مفتوحة بدون إغلاق" << std::endl;
-            return commands;
+            throw std::runtime_error("❌ خطأ: قوس '(' غير مغلق — يوجد " + std::to_string(parenDepth) + " قوس/أقواس مفتوحة بدون إغلاق");
         }
         if (braceDepth > 0) {
-            std::cerr << "❌ خطأ: قوس '{' غير مغلق — يوجد " << braceDepth << " قوس/أقواس مفتوحة بدون إغلاق" << std::endl;
-            return commands;
+            throw std::runtime_error("❌ خطأ: قوس '{' غير مغلق — يوجد " + std::to_string(braceDepth) + " قوس/أقواس مفتوحة بدون إغلاق");
         }
 
         // Split by newlines manually (avoid getline issues with UTF-8)

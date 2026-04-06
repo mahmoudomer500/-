@@ -712,17 +712,33 @@ void ArabicIDE::createEditor() {
     int toolbarHeight = 40;
     int statusHeight = 25;
     int outputHeight = 150;
+    int lineHeight = 22;  // ارتفاع السطر
+    int lineNumberWidth = 50;  // عرض عمود أرقام الأسطر
     int editorHeight = rc.bottom - toolbarHeight - statusHeight - outputHeight - 10;
+    int editorLeft = lineNumberWidth + 5;
+    int editorWidth = rc.right - editorLeft - 5;
+    
+    // ✅ إنشاء عمود أرقام الأسطر (Static control)
+    lineNumberControl = CreateWindowExW(
+        0, L"STATIC", L"",
+        WS_CHILD | WS_VISIBLE | SS_RIGHT | SS_NOTIFY,
+        5, toolbarHeight,
+        lineNumberWidth, editorHeight,
+        mainWindow, (HMENU)ID_LINE_NUMBER, GetModuleHandle(nullptr), nullptr
+    );
+    
+    // تعيين خلفية داكنة وأرقام رمادية
+    SetWindowLongPtrW(lineNumberControl, GWLP_USERDATA, 1);
     
     // إنشاء محرر النصوص (RichEdit)
     editControl = CreateWindowExW(
-        WS_EX_CLIENTEDGE | WS_EX_RIGHT, // Removed WS_EX_LAYOUTRTL
+        WS_EX_CLIENTEDGE,
         MSFTEDIT_CLASS,
         L"",
         WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_HSCROLL |
         ES_MULTILINE | ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_WANTRETURN | ES_RIGHT,
-        5, toolbarHeight,
-        rc.right - 10, editorHeight,
+        editorLeft, toolbarHeight,
+        editorWidth, editorHeight,
         mainWindow, (HMENU)ID_EDIT_CONTROL, GetModuleHandle(nullptr), nullptr
     );
     
@@ -741,7 +757,7 @@ void ArabicIDE::createEditor() {
     cf.bCharSet = ARABIC_CHARSET;
     SendMessage(editControl, EM_SETCHARFORMAT, SCF_ALL, (LPARAM)&cf);
     
-    // تعيين لون الخلفية (الوضع الداكن)
+    // تعيين لون خلفية المحرر (الوضع الداكن)
     if (config.darkMode) {
         SendMessage(editControl, EM_SETBKGNDCOLOR, 0, RGB(30, 30, 30));
         
@@ -754,8 +770,8 @@ void ArabicIDE::createEditor() {
     // السماح بالكتابة
     SendMessage(editControl, EM_SETREADONLY, FALSE, 0);
     
-    // تفعيل RTL بشكل كامل
-    // SendMessage(editControl, EM_SETEDITSTYLE, SES_BIDI, SES_BIDI); // يمكن تفعيله إذا لزم الأمر
+    // تحديث أرقام الأسطر الأولية
+    updateLineNumbers();
 }
 
 void ArabicIDE::createOutputPanel() {
@@ -903,7 +919,26 @@ LRESULT CALLBACK ArabicIDE::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         case WM_KEYDOWN:
             if (g_pIDE) {
                 switch (wParam) {
-                    case VK_F9:  g_pIDE->toggleBreakpoint(); break;
+                    case VK_F5:
+                        // F5: تشغيل عادي أو استمرار التصحيح
+                        if (g_pIDE->isDebugging) {
+                            g_pIDE->stepDebug();  // استمرار التصحيح
+                        } else {
+                            g_pIDE->runCode();    // تشغيل عادي
+                        }
+                        break;
+                    case VK_F9:
+                        // Ctrl+F9 = نقطة بداية، Ctrl+Shift+F9 = نقطة نهاية
+                        if (GetKeyState(VK_CONTROL) & 0x8000) {
+                            if (GetKeyState(VK_SHIFT) & 0x8000) {
+                                g_pIDE->setDebugEndPoint();
+                            } else {
+                                g_pIDE->setDebugStartPoint();
+                            }
+                        } else {
+                            g_pIDE->toggleBreakpoint();
+                        }
+                        break;
                     case VK_F10: g_pIDE->stepDebug();        break;
                     case VK_F11: g_pIDE->stepOverDebug();    break;
                 }
@@ -2100,14 +2135,13 @@ void ArabicIDE::highlightDebugLine(int line) {
     CHARFORMAT2W cfReset = {0};
     cfReset.cbSize      = sizeof(CHARFORMAT2W);
     cfReset.dwMask      = CFM_BACKCOLOR;
-    cfReset.crBackColor = RGB(30, 30, 30); // لون الخلفية الداكن
+    cfReset.crBackColor = RGB(30, 30, 30);
     SendMessage(editControl, EM_SETCHARFORMAT, SCF_SELECTION, (LPARAM)&cfReset);
 
-    if (line < 1) return; // -1 = أزل التمييز فقط
+    if (line < 1) return;
 
-    // احسب نطاق السطر المطلوب
     long lineStart = (long)SendMessage(editControl, EM_LINEINDEX, (WPARAM)(line - 1), 0);
-    long lineEnd   = (long)SendMessage(editControl, EM_LINEINDEX, (WPARAM)(line),     0);
+    long lineEnd   = (long)SendMessage(editControl, EM_LINEINDEX, (WPARAM)(line), 0);
     if (lineEnd < 0) lineEnd = GetWindowTextLengthW(editControl);
 
     CHARRANGE cr = {lineStart, lineEnd};
@@ -2115,12 +2149,31 @@ void ArabicIDE::highlightDebugLine(int line) {
     CHARFORMAT2W cfHL = {0};
     cfHL.cbSize      = sizeof(CHARFORMAT2W);
     cfHL.dwMask      = CFM_BACKCOLOR;
-    cfHL.crBackColor = RGB(80, 60, 0); // أصفر داكن = سطر التصحيح الحالي
+    cfHL.crBackColor = RGB(80, 60, 0);
     SendMessage(editControl, EM_SETCHARFORMAT, SCF_SELECTION, (LPARAM)&cfHL);
 
-    // أعد المؤشر للسطر
     SendMessage(editControl, EM_SETSEL, lineStart, lineStart);
     SendMessage(editControl, EM_SCROLLCARET, 0, 0);
+    
+    updateStatusBar("🔧 التصحيح - السطر " + std::to_string(line));
+}
+
+void ArabicIDE::updateLineNumbers() {
+    if (!editControl || !lineNumberControl) return;
+    
+    int totalLines = (int)SendMessage(editControl, EM_GETLINECOUNT, 0, 0);
+    
+    std::wstring lineNumbers;
+    for (int i = 1; i <= totalLines; i++) {
+        lineNumbers += std::to_wstring(i) + L"\r\n";
+    }
+    
+    SetWindowTextW(lineNumberControl, lineNumbers.c_str());
+    
+    HFONT hFont = CreateFontW(18, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        ARABIC_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY,
+        DEFAULT_PITCH | FF_DONTCARE, L"Consolas");
+    SendMessage(lineNumberControl, WM_SETFONT, (WPARAM)hFont, TRUE);
 }
 
 // ════════════════════════════════════════════════════════════

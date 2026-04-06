@@ -114,6 +114,7 @@ private:
     // عناصر الواجهة
     HWND mainWindow;
     HWND editControl;
+    HWND lineNumberControl;  // ✅ عنصر أرقام الأسطر
     HWND outputControl;
     HWND statusBar;
     HWND toolbar;
@@ -172,6 +173,7 @@ public:
     // ✅ وظائف المحرر الذكي
     void applySyntaxHighlighting();
     void analyzeCodeErrors();
+    void updateLineNumbers();  // ✅ تحديث أرقام الأسطر
 
     // ✅ وظائف المصحح (Debugger)
     void startDebugging();
@@ -265,7 +267,8 @@ constexpr int ID_HELP_DOCS    = 5002;
 
 // معرفات عناصر الواجهة
 constexpr int ID_EDIT_CONTROL = 6001;
-constexpr int ID_CODE_EDITOR = 6002; // ✅ New custom editor
+constexpr int ID_LINE_NUMBER = 6010;  // ✅ عنصر أرقام الأسطر
+constexpr int ID_CODE_EDITOR = 6002;
 constexpr int ID_OUTPUT_CONTROL = 6003;
 constexpr int ID_STATUS_BAR = 6004;
 constexpr int ID_TOOLBAR = 6005;
