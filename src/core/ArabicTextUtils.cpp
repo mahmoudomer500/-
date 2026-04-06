@@ -3,6 +3,7 @@
 #include <iostream>
 #include <sstream>
 #include <cmath>
+#include <cstring>
 
 namespace ArabicLanguage {
 

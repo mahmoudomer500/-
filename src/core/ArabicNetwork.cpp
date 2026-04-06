@@ -4,6 +4,8 @@
 #include <algorithm>
 #include <iomanip>
 #include <fstream>
+#ifdef _WIN32
+#include <winhttp.h>
 #include <wincrypt.h>
 #include <shlwapi.h>
 
@@ -11,6 +13,7 @@
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "crypt32.lib")
 #pragma comment(lib, "shlwapi.lib")
+#endif
 
 namespace ArabicLanguage {
 

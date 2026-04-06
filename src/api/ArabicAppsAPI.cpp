@@ -148,39 +148,118 @@ ArabicAIResult ArabicAI::chat(const std::string& message, const std::vector<std:
     return result;
 }
 
+ActivationType parseActivation(const std::string& name) {
+    if (name == "relu") return ActivationType::RELU;
+    if (name == "sigmoid") return ActivationType::SIGMOID;
+    if (name == "tanh") return ActivationType::TANH;
+    if (name == "softmax") return ActivationType::SOFTMAX;
+    return ActivationType::LINEAR;
+}
+
 bool ArabicAI::createDeepModel(const std::string& layers_config) {
     current_config = layers_config;
-    // Stub: NeuralNetwork not yet implemented
-    // TODO: Implement when NeuralNetwork is available
-    std::cerr << "Warning: NeuralNetwork not yet implemented, using stub" << std::endl;
+    nn = std::make_unique<NeuralNetwork>(LossType::MSE, 0.01);
+    
+    std::stringstream ss(layers_config);
+    std::string segment;
+    size_t last_output_size = 0;
+    
+    while (std::getline(ss, segment, ';')) {
+        if (segment.empty()) continue;
+        
+        if (segment.find("input:") == 0) {
+            try {
+                last_output_size = std::stoul(segment.substr(6));
+            } catch (...) {}
+            continue;
+        }
+        
+        if (segment.find("dense:") == 0) {
+            size_t comma_pos = segment.find(',');
+            size_t output_size = 0;
+            try {
+                output_size = std::stoul(segment.substr(6, comma_pos - 6));
+            } catch (...) {}
+            
+            std::string act_name = (comma_pos != std::string::npos) ? segment.substr(comma_pos + 1) : "relu";
+            
+            if (last_output_size == 0) {
+                std::cerr << "Error: Input size must be specified before the first dense layer" << std::endl;
+                return false;
+            }
+            
+            nn->addLayer(std::make_shared<DenseLayer>(last_output_size, output_size, parseActivation(act_name)));
+            last_output_size = output_size;
+        }
+    }
+    
     return true;
 }
 
 double ArabicAI::trainStep(const std::vector<double>& input, const std::vector<double>& target) {
-    // Stub: NeuralNetwork not yet implemented
-    (void)input; (void)target;
-    return 0.0;
+    if (!nn) return -1.0;
+    
+    Tensor<double> X({1, input.size()}, input);
+    Tensor<double> y({1, target.size()}, target);
+    
+    return nn->train_step(X, y);
 }
 
 ArabicAIResult ArabicAI::predictDeep(const std::vector<double>& input) {
     ArabicAIResult result;
     result.taskId = "deep_predict_" + std::to_string(rand());
-    result.success = false;
-    result.errorMessage = "NeuralNetwork not yet implemented";
-    (void)input;
+    
+    if (!nn) {
+        result.success = false;
+        result.errorMessage = "Model not initialized";
+        return result;
+    }
+    
+    try {
+        Tensor<double> X({1, input.size()}, input);
+        Tensor<double> pred = nn->predict(X);
+        
+        result.success = true;
+        result.raw_output = pred.getData();
+        
+        // Find max index for classification confidence if applicable
+        auto& data = pred.getData();
+        if (!data.empty()) {
+            auto it = std::max_element(data.begin(), data.end());
+            result.confidence = static_cast<float>(*it);
+            result.content = "التنبؤ اكتمل بنجاح";
+            
+            // Populate suggestions with string values for classification (used by ArabicTextClassifier)
+            for (double v : data) {
+                result.suggestions.push_back(std::to_string(v));
+            }
+        }
+    } catch (const std::exception& e) {
+        result.success = false;
+        result.errorMessage = e.what();
+    }
+    
     return result;
 }
 
 bool ArabicAI::saveModel(const std::string& path) {
-    // Stub: NeuralNetwork not yet implemented
-    (void)path;
-    return false;
+    if (!nn) return false;
+    try {
+        nn->save(path);
+        return true;
+    } catch (...) {
+        return false;
+    }
 }
 
 bool ArabicAI::loadModel(const std::string& path) {
-    // Stub: NeuralNetwork not yet implemented
-    (void)path;
-    return false;
+    if (!nn) nn = std::make_unique<NeuralNetwork>();
+    try {
+        nn->load(path);
+        return true;
+    } catch (...) {
+        return false;
+    }
 }
 
 } // namespace ArabicApps

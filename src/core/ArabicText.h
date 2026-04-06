@@ -108,12 +108,23 @@ public:
     };
 
 private:
+#ifdef _WIN32
     // Font management
     std::unordered_map<std::string, HFONT> fontCache;
     std::unordered_map<std::string, TEXTMETRIC> fontMetricsCache;
 
     // Current device context for text measurement
     HDC hdc;
+#else
+    // Stubs for non-Windows platforms
+    std::unordered_map<std::string, void*> fontCache;
+    struct TEXTMETRIC_STUB {
+        int tmAscent;
+        int tmDescent;
+    };
+    std::unordered_map<std::string, TEXTMETRIC_STUB> fontMetricsCache;
+    void* hdc;
+#endif
 
     // Text processing settings
     bool enableBidi;        // Bidirectional text support
@@ -131,7 +142,11 @@ public:
     /**
      * @brief تهيئة مكتبة النصوص
      */
+#ifdef _WIN32
     bool initialize(HDC deviceContext = nullptr);
+#else
+    bool initialize(void* deviceContext = nullptr);
+#endif
 
     /**
      * @brief إنهاء مكتبة النصوص
@@ -293,7 +308,11 @@ public:
     /**
      * @brief الحصول على معلومات الخط
      */
+#ifdef _WIN32
     TEXTMETRIC getFontMetrics(const std::string& fontKey);
+#else
+    TEXTMETRIC_STUB getFontMetrics(const std::string& fontKey);
+#endif
 
     /**
      * @brief إنشاء مفتاح خط فريد

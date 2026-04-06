@@ -866,7 +866,7 @@ void ArabicIDE::createMenus() {
     AppendMenuW(hHelp, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(hHelp, MF_STRING, ID_HELP_ABOUT,     L"🔧 دليل المصحح والأدوات...");
     AppendMenuW(hHelp, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(hHelp, MF_STRING, ID_HELP_ABOUT + 1, L"حول البيروني");
+    AppendMenuW(hHelp, MF_STRING, ID_HELP_ABOUT_APP, L"حول البيروني");
     AppendMenuW(hMenu, MF_POPUP, (UINT_PTR)hHelp, L"مساعدة");
     
     SetMenu(mainWindow, hMenu);
@@ -1047,7 +1047,7 @@ void ArabicIDE::handleCommand(WPARAM wParam) {
         return;
     }
 
-    if (cmd == ID_HELP_ABOUT + 1) {  // "حول البيروني"
+    if (cmd == ID_HELP_ABOUT_APP) {  // "حول البيروني"
         MessageBoxW(mainWindow,
             L"البيروني - بيئة التطوير العربية\n\n"
             L"الإصدار 2.0.0\n\n"

@@ -754,7 +754,9 @@ namespace ArabicLanguage {
             auto now_system = std::chrono::system_clock::now();
 
             for (const auto& point : points) {
-                auto system_timestamp = now_system + std::chrono::duration_cast<std::chrono::system_clock::duration>(point.timestamp - now_steady);
+                // Correctly calculate system time from steady time offset
+                auto delta = std::chrono::duration_cast<std::chrono::milliseconds>(point.timestamp - now_steady);
+                auto system_timestamp = now_system + delta;
                 auto time = std::chrono::system_clock::to_time_t(system_timestamp);
 
                 file << point.name << ",";

@@ -1,15 +1,28 @@
-// ArabicGUI.cpp - تنفيذ واجهة المستخدم الرسومية العربية
-// Arabic GUI Implementation - Win32 API
-
 #include "ArabicGUI.h"
 #include "ArabicRuntime.h"
+
+#ifdef _WIN32
+#include <windows.h>
 #include <commctrl.h>
 #include <richedit.h>
+#endif
 #include <algorithm>
 
+#ifdef _WIN32
 #pragma comment(lib, "comctl32.lib")
+#endif
 
 namespace ArabicLanguage {
+
+static void initializeCommonControls() {
+    static bool initialized = false;
+    if (initialized) return;
+#ifdef _WIN32
+    INITCOMMONCONTROLSEX icc = {sizeof(INITCOMMONCONTROLSEX), ICC_WIN95_CLASSES | ICC_PROGRESS_CLASS};
+    InitCommonControlsEx(&icc);
+#endif
+    initialized = true;
+}
 
 // ══════════════════════════════════════════════════════════════
 // ArabicWidget Implementation
@@ -123,6 +136,7 @@ void ArabicWindow::unregisterWindow() {
 }
 
 void ArabicWindow::create() {
+    initializeCommonControls();
     registerWindow();
 
     int wTitleLen = MultiByteToWideChar(CP_UTF8, 0, m_title.c_str(), -1, nullptr, 0);

@@ -21,6 +21,7 @@ ArabicText::~ArabicText() {
     shutdown();
 }
 
+#ifdef _WIN32
 bool ArabicText::initialize(HDC deviceContext) {
     hdc = deviceContext ? deviceContext : GetDC(nullptr);
 
@@ -35,12 +36,26 @@ bool ArabicText::initialize(HDC deviceContext) {
 void ArabicText::shutdown() {
     clearFontCache();
 
-    if (hdc && !GetDC(nullptr)) { // Only release if we created it
+    if (hdc) {
+        // If it's a shared DC, we shouldn't really release it if it's from GetDC(nullptr)
+        // because that's the screen DC, but traditionally it's fine.
+        // However, standard ReleaseDC requires the HWND.
         ReleaseDC(nullptr, hdc);
         hdc = nullptr;
     }
 }
+#else
+bool ArabicText::initialize(void* deviceContext) {
+    hdc = deviceContext;
+    return true;
+}
 
+void ArabicText::shutdown() {
+    clearFontCache();
+}
+#endif
+
+#ifdef _WIN32
 bool ArabicText::loadFont(const std::string& fontName, const FontProperties& properties) {
     if (!hdc) return false;
 
@@ -87,7 +102,19 @@ bool ArabicText::loadFont(const std::string& fontName, const FontProperties& pro
 
     return true;
 }
+#else
+bool ArabicText::loadFont(const std::string& fontName, const FontProperties& properties) {
+    std::string fontKey = createFontKey(properties);
+    if (fontCache.find(fontKey) != fontCache.end()) return true;
+    
+    fontCache[fontKey] = nullptr;
+    TEXTMETRIC_STUB tm = { static_cast<int>(properties.size), 0 };
+    fontMetricsCache[fontKey] = tm;
+    return true;
+}
+#endif
 
+#ifdef _WIN32
 ArabicText::TextMetrics ArabicText::measureText(const std::string& text,
                                               const FontProperties& font) {
     TextMetrics metrics;
@@ -122,6 +149,25 @@ ArabicText::TextMetrics ArabicText::measureText(const std::string& text,
 
     return metrics;
 }
+#else
+ArabicText::TextMetrics ArabicText::measureText(const std::string& text,
+                                              const FontProperties& font) {
+    TextMetrics metrics;
+    std::string fontKey = createFontKey(font);
+    if (fontCache.find(fontKey) == fontCache.end()) {
+        loadFont(font.fontName, font);
+    }
+
+    // Fake measurement for non-windows
+    metrics.width = text.length() * font.size * 0.6f;
+    metrics.height = font.size;
+    metrics.glyphCount = text.length();
+    metrics.ascent = font.size * 0.8f;
+    metrics.descent = font.size * 0.2f;
+
+    return metrics;
+}
+#endif
 
 ArabicText::TextParagraph ArabicText::layoutText(const std::string& text,
                                                const FontProperties& font,
@@ -465,6 +511,7 @@ bool ArabicText::isArabicNumber(char32_t codepoint) {
     return ArabicTextHelpers::isArabicNumber(codepoint);
 }
 
+#ifdef _WIN32
 std::string ArabicText::utf8ToCp1256(const std::string& utf8) {
     // Convert UTF-8 to CP1256 (Arabic Windows codepage)
     int len = MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), -1, nullptr, 0);
@@ -490,6 +537,15 @@ std::string ArabicText::cp1256ToUtf8(const std::string& cp1256) {
 
     return result;
 }
+#else
+std::string ArabicText::utf8ToCp1256(const std::string& utf8) {
+    return utf8; // Stub: no conversion on non-windows
+}
+
+std::string ArabicText::cp1256ToUtf8(const std::string& cp1256) {
+    return cp1256; // Stub: no conversion on non-windows
+}
+#endif
 
 std::u32string ArabicText::utf8ToUtf32(const std::string& utf8) {
     return ArabicTextHelpers::utf8ToUtf32(utf8);
@@ -499,6 +555,7 @@ std::string ArabicText::utf32ToUtf8(const std::u32string& utf32) {
     return ArabicTextHelpers::utf32ToUtf8(utf32);
 }
 
+#ifdef _WIN32
 std::vector<std::string> ArabicText::getAvailableArabicFonts() {
     std::vector<std::string> fonts;
 
@@ -526,12 +583,18 @@ std::vector<std::string> ArabicText::getAvailableArabicFonts() {
 
     return fonts;
 }
+#else
+std::vector<std::string> ArabicText::getAvailableArabicFonts() {
+    return {"Arial", "Courier New", "Sans Serif"};
+}
+#endif
 
 bool ArabicText::isArabicFontAvailable(const std::string& fontName) {
     auto fonts = getAvailableArabicFonts();
     return std::find(fonts.begin(), fonts.end(), fontName) != fonts.end();
 }
 
+#ifdef _WIN32
 void ArabicText::clearFontCache() {
     for (auto& pair : fontCache) {
         DeleteObject(pair.second);
@@ -539,7 +602,14 @@ void ArabicText::clearFontCache() {
     fontCache.clear();
     fontMetricsCache.clear();
 }
+#else
+void ArabicText::clearFontCache() {
+    fontCache.clear();
+    fontMetricsCache.clear();
+}
+#endif
 
+#ifdef _WIN32
 TEXTMETRIC ArabicText::getFontMetrics(const std::string& fontKey) {
     auto it = fontMetricsCache.find(fontKey);
     if (it != fontMetricsCache.end()) {
@@ -549,6 +619,17 @@ TEXTMETRIC ArabicText::getFontMetrics(const std::string& fontKey) {
     TEXTMETRIC tm = {0};
     return tm;
 }
+#else
+ArabicText::TEXTMETRIC_STUB ArabicText::getFontMetrics(const std::string& fontKey) {
+    auto it = fontMetricsCache.find(fontKey);
+    if (it != fontMetricsCache.end()) {
+        return it->second;
+    }
+
+    TEXTMETRIC_STUB tm = {0, 0};
+    return tm;
+}
+#endif
 
 std::string ArabicText::createFontKey(const FontProperties& props) {
     std::stringstream ss;

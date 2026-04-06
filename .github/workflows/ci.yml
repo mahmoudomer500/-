@@ -31,14 +31,11 @@ jobs:
       run: |
         $env:PATH = "C:\ProgramData\mingw64\mingw64\bin;$env:PATH"
         New-Item -ItemType Directory -Force -Path build_release/Release | Out-Null
-        # Exclude files by name (not full path) that depend on missing implementations
-        $excludeNames = @("ArabicAppsAPI.cpp", "ArabicNetwork.cpp", "ArabicGUI.cpp", "ArabicVisionBridge.cpp", "ArabicTextClassifier.cpp", "WindowManager_stub.cpp", "ArabicVisionBridge_stub.cpp")
-        $cppFiles = Get-ChildItem -Path src/core,src/runtime,src/stdlib,src/utils/core,src/utils/debug,src/modules/core -Recurse -Filter "*.cpp" |
+        # All files are now fixed - compile everything
+        $excludeNames = @()
+        $cppFiles = Get-ChildItem -Path src/core,src/runtime,src/stdlib,src/utils/core,src/utils/debug,src/modules/core,src/modules/ai -Recurse -Filter "*.cpp" |
           Where-Object { $excludeNames -notcontains $_.Name } |
           Select-Object -ExpandProperty FullName
-        # Add stub files explicitly
-        $cppFiles += "$PWD/src/core/ArabicVisionBridge_stub.cpp"
-        $cppFiles += "$PWD/src/modules/ai/ArabicComputerVision.cpp"
         $cppFiles += "src/main.cpp"
         # Normalize paths and deduplicate
         $cppFiles = $cppFiles | ForEach-Object { $_.Replace('\', '/').Replace('//', '/') } | Sort-Object -Unique
@@ -54,7 +51,7 @@ jobs:
         )
         $includes = $includeDirs -join " "
         $cppList = ($cppFiles | ForEach-Object { "`"$_`"" }) -join " "
-        $cmd = "g++ -std=c++17 -O2 -D_CRT_SECURE_NO_WARNINGS -finput-charset=UTF-8 -fexec-charset=UTF-8 $includes $cppList -o build_release/Release/arabic_compiler.exe -lgdiplus -lole32 -loleaut32 -lstrmiids -luuid -luser32 -lgdi32 -lshell32 -lcomdlg32 -lws2_32 2>&1"
+        $cmd = "g++ -std=c++17 -O2 -D_CRT_SECURE_NO_WARNINGS -finput-charset=UTF-8 -fexec-charset=UTF-8 $includes $cppList -o build_release/Release/arabic_compiler.exe -lgdiplus -lole32 -loleaut32 -lstrmiids -luuid -luser32 -lgdi32 -lshell32 -lcomdlg32 -lws2_32 -lwinhttp -lcomctl32 2>&1"
         Write-Host "Running: g++ ..."
         Invoke-Expression $cmd
         if ($LASTEXITCODE -ne 0) { exit 1 }

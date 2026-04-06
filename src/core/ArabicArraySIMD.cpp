@@ -6,17 +6,19 @@
 #include <intrin.h>
 #ifdef __GNUC__
 #include <cpuid.h>
-static inline void __cpuid_wrapper(int cpu_info[4], int leaf) {
+static inline void native_cpuid(int cpu_info[4], int leaf) {
     __get_cpuid(leaf, (unsigned int*)&cpu_info[0], (unsigned int*)&cpu_info[1], (unsigned int*)&cpu_info[2], (unsigned int*)&cpu_info[3]);
 }
-#define __cpuid __cpuid_wrapper
+#else
+static inline void native_cpuid(int cpu_info[4], int leaf) {
+    __cpuid(cpu_info, leaf);
+}
 #endif
 #else
 #include <cpuid.h>
-static inline void __cpuid_wrapper(int cpu_info[4], int leaf) {
+static inline void native_cpuid(int cpu_info[4], int leaf) {
     __get_cpuid(leaf, (unsigned int*)&cpu_info[0], (unsigned int*)&cpu_info[1], (unsigned int*)&cpu_info[2], (unsigned int*)&cpu_info[3]);
 }
-#define __cpuid __cpuid_wrapper
 #endif
 
 namespace ArabicLanguage {
@@ -540,7 +542,7 @@ bool detect_avx2() {
 #ifdef __AVX2__
     // فحص فعلي للدعم في runtime
     int cpu_info[4];
-    __cpuid(cpu_info, 7);
+    native_cpuid(cpu_info, 7);
     return (cpu_info[1] & (1 << 5)) != 0; // AVX2 bit
 #else
     return false;
@@ -550,7 +552,7 @@ bool detect_avx2() {
 bool detect_avx512() {
 #ifdef __AVX512F__
     int cpu_info[4];
-    __cpuid(cpu_info, 7);
+    native_cpuid(cpu_info, 7);
     return (cpu_info[1] & (1 << 16)) != 0; // AVX512F bit
 #else
     return false;
@@ -568,7 +570,7 @@ bool detect_neon() {
 bool detect_sse4_1() {
 #ifdef __SSE4_1__
     int cpu_info[4];
-    __cpuid(cpu_info, 1);
+    native_cpuid(cpu_info, 1);
     return (cpu_info[2] & (1 << 19)) != 0; // SSE4.1 bit
 #else
     return false;
@@ -577,7 +579,7 @@ bool detect_sse4_1() {
 
 std::string get_cpu_vendor() {
     int cpu_info[4];
-    __cpuid(cpu_info, 0);
+    native_cpuid(cpu_info, 0);
 
     char vendor[13];
     memcpy(vendor, &cpu_info[1], 4);
