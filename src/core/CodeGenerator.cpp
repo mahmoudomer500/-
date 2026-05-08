@@ -186,6 +186,7 @@ bool CodeGenerator::buildExecutable(const std::string& outputPath) {
         peImports.push_back(kernel32);
     }
     
+    // ✅ MSVCRT is now only included if it has functions actually being used
     if (!msvcrt.functions.empty()) {
         peImports.push_back(msvcrt);
     }
@@ -966,13 +967,23 @@ void CodeGenerator::generateExpression(const Value& val) {
         static int objCounter = 0;
         std::string objId = std::to_string(objCounter++);
         
-        // 1. Allocate memory (Header: 16 bytes, Each prop: 16 bytes [KeyPtr, Value])
+        // 1. Allocate memory: HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, size)
         size_t totalBytes = 16 + (val.map_elements.size() * 16);
-        this->emit(X64Encoder::MOV(Register::RCX, static_cast<int64_t>(totalBytes)));
+
         this->emit(X64Encoder::SUB(Register::RSP, Operand::Imm(32)));
-        uint32_t mallocOffset = this->getCurrentOffset() + 1;
+        uint32_t gphOffsetObj = this->getCurrentOffset() + 1;
         this->emit(Instruction(InstructionType::CALL, Operand::Imm(0)));
-        this->relocations.add(mallocOffset, "malloc", RelocationType::REL32);
+        this->relocations.add(gphOffsetObj, "GetProcessHeap", RelocationType::REL32);
+        this->emit(X64Encoder::ADD(Register::RSP, Operand::Imm(32)));
+
+        this->emit(X64Encoder::MOV(Register::RCX, Register::RAX));
+        this->emit(X64Encoder::MOV(Register::RDX, 8)); // HEAP_ZERO_MEMORY
+        this->emit(X64Encoder::MOV(Register::R8, static_cast<int64_t>(totalBytes)));
+
+        this->emit(X64Encoder::SUB(Register::RSP, Operand::Imm(32)));
+        uint32_t haOffsetObj = this->getCurrentOffset() + 1;
+        this->emit(Instruction(InstructionType::CALL, Operand::Imm(0)));
+        this->relocations.add(haOffsetObj, "HeapAlloc", RelocationType::REL32);
         this->emit(X64Encoder::ADD(Register::RSP, Operand::Imm(32)));
         
         // RAX has object pointer. Move to RBX to preserve during evaluations.
@@ -1226,76 +1237,32 @@ void CodeGenerator::generatePrint(const Command& cmd) {
         if (!argPtr) continue; // Null safety
         const Value& arg = *argPtr;
         if (arg.type == ValueType::STRING) {
-            // 1. Add string to code section (embedded)
+            // ✅ Already using GetStdHandle/WriteFile logic which is good.
+            // Keeping it but ensuring it's robust.
             std::string label = this->addStringLiteral(arg.string_value);
             size_t strLen = arg.string_value.length();
             
-            // ═══════════════════════════════════════════════
-            // 2. GetStdHandle(STD_OUTPUT_HANDLE = -11)
-            // ═══════════════════════════════════════════════
-            this->emit(X64Encoder::MOV(Register::RCX, -11));
-            this->emit(Instruction(InstructionType::SUB, 
-                           Operand::Reg(Register::RSP), 
-                           Operand::Imm(32)));  // Shadow space
-            
-            uint32_t callOffset1 = this->getCurrentOffset() + 1;
+            this->emit(X64Encoder::MOV(Register::RCX, -11)); // STD_OUTPUT_HANDLE
+            this->emit(X64Encoder::SUB(Register::RSP, Operand::Imm(32)));
+            uint32_t gshOffset = this->getCurrentOffset() + 1;
             this->emit(Instruction(InstructionType::CALL, Operand::Imm(0)));
-            this->relocations.add(callOffset1, "GetStdHandle", RelocationType::REL32);
+            this->relocations.add(gshOffset, "GetStdHandle", RelocationType::REL32);
+            this->emit(X64Encoder::ADD(Register::RSP, Operand::Imm(32)));
             
-            this->emit(Instruction(InstructionType::ADD, 
-                           Operand::Reg(Register::RSP), 
-                           Operand::Imm(32)));
-            
-            // ═══════════════════════════════════════════════
-            // 3. WriteFile(handle, buffer, length, &written, NULL)
-            // ═══════════════════════════════════════════════
-            
-            // RCX = handle (from RAX)
-            this->emit(X64Encoder::MOV(Register::RCX, Register::RAX));
-            
-            // RDX = buffer pointer
-            uint32_t leaOffset = this->getCurrentOffset() + 3;
-            this->emit(Instruction(InstructionType::LEA, 
-                           Operand::Reg(Register::RDX), 
-                           Operand::Label(label)));
-            this->relocations.add(leaOffset, label, RelocationType::RIP_REL32);
-            
-            // R8 = length
+            this->emit(X64Encoder::MOV(Register::RCX, Register::RAX)); // handle
+            uint32_t leaOffsetStr = this->getCurrentOffset() + 3;
+            this->emit(Instruction(InstructionType::LEA, Operand::Reg(Register::RDX), Operand::Label(label)));
+            this->relocations.add(leaOffsetStr, label, RelocationType::RIP_REL32);
             this->emit(X64Encoder::MOV(Register::R8, static_cast<int64_t>(strLen)));
             
-            // R9 = &bytesWritten
-            // We need a safe scratch space. RBP-16 is dangerous as it might be a local variable.
-            // We will allocate 64 bytes on stack:
-            // 0-31: Shadow space (32 bytes)
-            // 32-39: Param 5 (lpOverlapped)
-            // 40-47: bytesWritten (temp)
-            // 48-63: Padding/Unused
+            this->emit(X64Encoder::SUB(Register::RSP, Operand::Imm(64)));
+            this->emit(Instruction(InstructionType::LEA, Operand::Reg(Register::R9), Operand::Mem(Register::RSP, 40)));
+            this->emit(Instruction(InstructionType::MOV, Operand::Mem(Register::RSP, 32), Operand::Imm(0)));
             
-            // Allocate 64 bytes
-            this->emit(Instruction(InstructionType::SUB, 
-                           Operand::Reg(Register::RSP), 
-                           Operand::Imm(64)));
-
-            // R9 = &bytesWritten (at RSP + 40)
-            this->emit(Instruction(InstructionType::LEA,
-                           Operand::Reg(Register::R9),
-                           Operand::Mem(Register::RSP, 40)));
-            
-            // 5th param: lpOverlapped = NULL (at RSP+32)
-            this->emit(Instruction(InstructionType::MOV,
-                           Operand::Mem(Register::RSP, 32),
-                           Operand::Imm(0)));
-            
-            // Call WriteFile
-            // RCX=Handle, RDX=Buffer, R8=Len, R9=WrittenPtr, [RSP+32]=NULL
-            uint32_t callOffset2 = this->getCurrentOffset() + 1;
+            uint32_t wfOffset = this->getCurrentOffset() + 1;
             this->emit(Instruction(InstructionType::CALL, Operand::Imm(0)));
-            this->relocations.add(callOffset2, "WriteFile", RelocationType::REL32);
-            
-            // Cleanup: 64 bytes
-            this->emit(Instruction(InstructionType::ADD, 
-                           Operand::Reg(Register::RSP), 
-                           Operand::Imm(64)));
+            this->relocations.add(wfOffset, "WriteFile", RelocationType::REL32);
+            this->emit(X64Encoder::ADD(Register::RSP, Operand::Imm(64)));
         }
         else if (arg.type == ValueType::OPERATION && (arg.operation == "+" || arg.operator_ == "+")) {
             // String concatenation: try constant fold first
@@ -1582,15 +1549,22 @@ void CodeGenerator::generateFunctionCall(const Command& cmd) {
         this->emit(X64Encoder::MOV(Register::RSI, Register::RDX)); // RSI = start
         this->emit(X64Encoder::MOV(Register::RDI, Register::R8));  // RDI = length
         
-        // 1. Call malloc(length + 1)
-        this->emit(X64Encoder::MOV(Register::RCX, Register::RDI)); // size = length
-        this->emit(X64Encoder::ADD(Register::RCX, Operand::Imm(1))); // +1 for null terminator
+        // 1. Call HeapAlloc(GetProcessHeap(), 8, length + 1)
         this->emit(X64Encoder::SUB(Register::RSP, Operand::Imm(32)));
-        
-        uint32_t mallocOffset = this->getCurrentOffset();
+        uint32_t gphOffsetSub = this->getCurrentOffset() + 1;
         this->emit(Instruction(InstructionType::CALL, Operand::Imm(0)));
-        this->relocations.add(mallocOffset + 1, "malloc", RelocationType::REL32);
-        
+        this->relocations.add(gphOffsetSub, "GetProcessHeap", RelocationType::REL32);
+        this->emit(X64Encoder::ADD(Register::RSP, Operand::Imm(32)));
+
+        this->emit(X64Encoder::MOV(Register::RCX, Register::RAX));
+        this->emit(X64Encoder::MOV(Register::RDX, 8)); // HEAP_ZERO_MEMORY
+        this->emit(X64Encoder::MOV(Register::R8, Register::RDI)); // size = length
+        this->emit(X64Encoder::ADD(Register::R8, Operand::Imm(1))); // +1 for null terminator
+
+        this->emit(X64Encoder::SUB(Register::RSP, Operand::Imm(32)));
+        uint32_t haOffsetSub = this->getCurrentOffset() + 1;
+        this->emit(Instruction(InstructionType::CALL, Operand::Imm(0)));
+        this->relocations.add(haOffsetSub, "HeapAlloc", RelocationType::REL32);
         this->emit(X64Encoder::ADD(Register::RSP, Operand::Imm(32)));
         
         // RAX = allocated buffer
@@ -1732,12 +1706,21 @@ void CodeGenerator::generateFunctionCall(const Command& cmd) {
         this->emit(X64Encoder::PUSH(Register::RCX));
         this->emit(X64Encoder::PUSH(Register::RDX));
         
-        // 2. Allocate 2 bytes
-        this->emit(X64Encoder::MOV(Register::RCX, 2));
-        this->emit(X64Encoder::SUB(Register::RSP, Operand::Imm(32))); 
-        uint32_t mallocOffset = this->getCurrentOffset();
+        // 2. Allocate 2 bytes using HeapAlloc
+        this->emit(X64Encoder::SUB(Register::RSP, Operand::Imm(32)));
+        uint32_t gphOffsetChar = this->getCurrentOffset() + 1;
         this->emit(Instruction(InstructionType::CALL, Operand::Imm(0)));
-        this->relocations.add(mallocOffset + 1, "malloc", RelocationType::REL32);
+        this->relocations.add(gphOffsetChar, "GetProcessHeap", RelocationType::REL32);
+        this->emit(X64Encoder::ADD(Register::RSP, Operand::Imm(32)));
+
+        this->emit(X64Encoder::MOV(Register::RCX, Register::RAX));
+        this->emit(X64Encoder::MOV(Register::RDX, 8));
+        this->emit(X64Encoder::MOV(Register::R8, 2));
+
+        this->emit(X64Encoder::SUB(Register::RSP, Operand::Imm(32)));
+        uint32_t haOffsetChar = this->getCurrentOffset() + 1;
+        this->emit(Instruction(InstructionType::CALL, Operand::Imm(0)));
+        this->relocations.add(haOffsetChar, "HeapAlloc", RelocationType::REL32);
         this->emit(X64Encoder::ADD(Register::RSP, Operand::Imm(32)));
         
         // RAX has new buffer. Move to RBX to save.
@@ -1783,12 +1766,21 @@ void CodeGenerator::generateFunctionCall(const Command& cmd) {
         
         this->emit(X64Encoder::PUSH(Register::RAX)); // Save result
         
-        // 3. Allocate 2 bytes
-        this->emit(X64Encoder::MOV(Register::RCX, 2));
-        this->emit(X64Encoder::SUB(Register::RSP, Operand::Imm(32))); 
-        uint32_t mallocOffset = this->getCurrentOffset();
+        // 3. Allocate 2 bytes using HeapAlloc
+        this->emit(X64Encoder::SUB(Register::RSP, Operand::Imm(32)));
+        uint32_t gphOffsetUp = this->getCurrentOffset() + 1;
         this->emit(Instruction(InstructionType::CALL, Operand::Imm(0)));
-        this->relocations.add(mallocOffset + 1, "malloc", RelocationType::REL32);
+        this->relocations.add(gphOffsetUp, "GetProcessHeap", RelocationType::REL32);
+        this->emit(X64Encoder::ADD(Register::RSP, Operand::Imm(32)));
+
+        this->emit(X64Encoder::MOV(Register::RCX, Register::RAX));
+        this->emit(X64Encoder::MOV(Register::RDX, 8));
+        this->emit(X64Encoder::MOV(Register::R8, 2));
+
+        this->emit(X64Encoder::SUB(Register::RSP, Operand::Imm(32)));
+        uint32_t haOffsetUp = this->getCurrentOffset() + 1;
+        this->emit(Instruction(InstructionType::CALL, Operand::Imm(0)));
+        this->relocations.add(haOffsetUp, "HeapAlloc", RelocationType::REL32);
         this->emit(X64Encoder::ADD(Register::RSP, Operand::Imm(32)));
         
         // RAX has buffer.
@@ -1824,11 +1816,20 @@ void CodeGenerator::generateFunctionCall(const Command& cmd) {
         
         this->emit(X64Encoder::PUSH(Register::RAX));
         
-        this->emit(X64Encoder::MOV(Register::RCX, 2));
-        this->emit(X64Encoder::SUB(Register::RSP, Operand::Imm(32))); 
-        uint32_t mallocOffset = this->getCurrentOffset();
+        this->emit(X64Encoder::SUB(Register::RSP, Operand::Imm(32)));
+        uint32_t gphOffsetDown = this->getCurrentOffset() + 1;
         this->emit(Instruction(InstructionType::CALL, Operand::Imm(0)));
-        this->relocations.add(mallocOffset + 1, "malloc", RelocationType::REL32);
+        this->relocations.add(gphOffsetDown, "GetProcessHeap", RelocationType::REL32);
+        this->emit(X64Encoder::ADD(Register::RSP, Operand::Imm(32)));
+
+        this->emit(X64Encoder::MOV(Register::RCX, Register::RAX));
+        this->emit(X64Encoder::MOV(Register::RDX, 8));
+        this->emit(X64Encoder::MOV(Register::R8, 2));
+
+        this->emit(X64Encoder::SUB(Register::RSP, Operand::Imm(32)));
+        uint32_t haOffsetDown = this->getCurrentOffset() + 1;
+        this->emit(Instruction(InstructionType::CALL, Operand::Imm(0)));
+        this->relocations.add(haOffsetDown, "HeapAlloc", RelocationType::REL32);
         this->emit(X64Encoder::ADD(Register::RSP, Operand::Imm(32)));
         
         this->emit(X64Encoder::MOV(Register::RBX, Register::RAX));
@@ -2043,43 +2044,52 @@ void CodeGenerator::generatePrintInteger(const Value& val) {
 
 void CodeGenerator::generateFileOpen(const Command& cmd) {
     // متغير = افتح_ملف("اسم_الملف", "الوضع")
-    // Result: file handle (FILE*) in RAX, store in variable
+    // Use Win32 CreateFileA instead of fopen
     
-    // 1. Get filename and mode from arguments
-    if (cmd.arguments.size() < 2) {
-        throw std::runtime_error("FILE_OPEN requires 2 arguments");
+    if (cmd.arguments.size() < 1) {
+        throw std::runtime_error("FILE_OPEN requires at least filename");
     }
     
     const Value& filenameVal = *cmd.arguments[0];
-    const Value& modeVal = *cmd.arguments[1];
-    
-    // 2. Add filename string to data section
     std::string filenameLabel = this->addStringLiteral(filenameVal.string_value);
-    std::string modeLabel = this->addStringLiteral(modeVal.string_value);
     
-    // 3. Prepare arguments for fopen(filename, mode)
-    // RCX = filename
-    uint32_t leaFilenameOffset = this->getCurrentOffset() + 3;
-    this->emit(Instruction(InstructionType::LEA,
-                   Operand::Reg(Register::RCX),
-                   Operand::Label(filenameLabel)));
-    this->relocations.add(leaFilenameOffset, filenameLabel, RelocationType::RIP_REL32);
+    // CreateFileA(lpFileName, dwDesiredAccess, dwShareMode, lpSecurityAttributes,
+    //             dwCreationDisposition, dwFlagsAndAttributes, hTemplateFile)
     
-    // RDX = mode
-    uint32_t leaModeOffset = this->getCurrentOffset() + 3;
-    this->emit(Instruction(InstructionType::LEA,
-                   Operand::Reg(Register::RDX),
-                   Operand::Label(modeLabel)));
-    this->relocations.add(leaModeOffset, modeLabel, RelocationType::RIP_REL32);
+    // 1. lpFileName (RCX)
+    uint32_t leaOffset = this->getCurrentOffset() + 3;
+    this->emit(Instruction(InstructionType::LEA, Operand::Reg(Register::RCX), Operand::Label(filenameLabel)));
+    this->relocations.add(leaOffset, filenameLabel, RelocationType::RIP_REL32);
     
-    // 4. Call fopen
-    this->emit(X64Encoder::SUB(Register::RSP, Operand::Imm(32))); // Shadow space
+    // 2. dwDesiredAccess (RDX) - Generic Read (0x80000000) or Write (0x40000000)
+    // For now, let's assume Generic Read/Write
+    this->emit(X64Encoder::MOV(Register::RDX, 0xC0000000));
+
+    // 3. dwShareMode (R8) - Share Read (1)
+    this->emit(X64Encoder::MOV(Register::R8, 1));
     
+    // 4. lpSecurityAttributes (R9) - NULL (0)
+    this->emit(X64Encoder::MOV(Register::R9, 0));
+
+    // Stack arguments (5, 6, 7)
+    this->emit(X64Encoder::SUB(Register::RSP, Operand::Imm(64))); // 32 shadow + 24 args + 8 alignment
+
+    // 5. dwCreationDisposition - OPEN_ALWAYS (4)
+    this->emit(Instruction(InstructionType::MOV, Operand::Mem(Register::RSP, 32), Operand::Imm(4)));
+
+    // 6. dwFlagsAndAttributes - FILE_ATTRIBUTE_NORMAL (128)
+    this->emit(Instruction(InstructionType::MOV, Operand::Mem(Register::RSP, 40), Operand::Imm(128)));
+
+    // 7. hTemplateFile - NULL (0)
+    this->emit(Instruction(InstructionType::MOV, Operand::Mem(Register::RSP, 48), Operand::Imm(0)));
+
+    // Call CreateFileA
     uint32_t callOffset = this->getCurrentOffset() + 1;
     this->emit(Instruction(InstructionType::CALL, Operand::Imm(0)));
-    this->relocations.add(callOffset, "fopen", RelocationType::REL32);
-    
-    this->emit(X64Encoder::ADD(Register::RSP, Operand::Imm(32)));
+    this->relocations.add(callOffset, "CreateFileA", RelocationType::REL32);
+    this->symbols.addImport("CreateFileA", 40);
+
+    this->emit(X64Encoder::ADD(Register::RSP, Operand::Imm(64)));
     
     // 5. Store result (FILE* in RAX) to variable
     std::string varName = cmd.variable;
@@ -2256,7 +2266,7 @@ void CodeGenerator::generateFileWrite(const Command& cmd) {
 }
 
 void CodeGenerator::generateFileClose(const Command& cmd) {
-    // أغلق(ملف)
+    // أغلق(ملف) - Use CloseHandle instead of fclose
     
     if (cmd.arguments.size() < 1) {
         throw std::runtime_error("FILE_CLOSE requires file handle argument");
@@ -2276,12 +2286,13 @@ void CodeGenerator::generateFileClose(const Command& cmd) {
                        Operand::Mem(Register::RBP, -static_cast<int32_t>(stackOffset))));
     }
     
-    // 2. Call fclose
+    // 2. Call CloseHandle
     this->emit(X64Encoder::SUB(Register::RSP, Operand::Imm(32)));
     
     uint32_t callOffset = this->getCurrentOffset() + 1;
     this->emit(Instruction(InstructionType::CALL, Operand::Imm(0)));
-    this->relocations.add(callOffset, "fclose", RelocationType::REL32);
+    this->relocations.add(callOffset, "CloseHandle", RelocationType::REL32);
+    this->symbols.addImport("CloseHandle", 41);
     
     this->emit(X64Encoder::ADD(Register::RSP, Operand::Imm(32)));
 }
@@ -2308,13 +2319,23 @@ void CodeGenerator::generateArrayDeclaration(const Command& cmd) {
     // Header layout: [Capacity (8 bytes)][Count (8 bytes)]
     size_t totalBytes = (arraySize * 8) + 16;
 
-    // 1. Allocate memory using malloc
-    this->emit(X64Encoder::MOV(Register::RCX, static_cast<int64_t>(totalBytes)));
-    this->emit(X64Encoder::SUB(Register::RSP, Operand::Imm(32)));
-
-    uint32_t mallocOffset = this->getCurrentOffset() + 1;
+    // 1. Allocate memory using Win32 HeapAlloc (instead of malloc)
+    // First, get default process heap
+    this->emit(X64Encoder::SUB(Register::RSP, Operand::Imm(32))); // Shadow space
+    uint32_t gphOffset = this->getCurrentOffset() + 1;
     this->emit(Instruction(InstructionType::CALL, Operand::Imm(0)));
-    this->relocations.add(mallocOffset, "malloc", RelocationType::REL32);
+    this->relocations.add(gphOffset, "GetProcessHeap", RelocationType::REL32);
+    this->emit(X64Encoder::ADD(Register::RSP, Operand::Imm(32)));
+
+    // RAX now has hHeap. Prepare HeapAlloc(hHeap, dwFlags, dwBytes)
+    this->emit(X64Encoder::MOV(Register::RCX, Register::RAX)); // hHeap
+    this->emit(X64Encoder::MOV(Register::RDX, 8));            // dwFlags = HEAP_ZERO_MEMORY (0x8)
+    this->emit(X64Encoder::MOV(Register::R8, static_cast<int64_t>(totalBytes))); // dwBytes
+
+    this->emit(X64Encoder::SUB(Register::RSP, Operand::Imm(32))); // Shadow space
+    uint32_t haOffset = this->getCurrentOffset() + 1;
+    this->emit(Instruction(InstructionType::CALL, Operand::Imm(0)));
+    this->relocations.add(haOffset, "HeapAlloc", RelocationType::REL32);
     this->emit(X64Encoder::ADD(Register::RSP, Operand::Imm(32)));
 
     // 2. Initialize Header
@@ -2595,14 +2616,21 @@ void CodeGenerator::generateNewObject(const Command& cmd) {
     
     if (objectSize == 0) objectSize = 8; // Minimum size
     
-    // 1. Allocate memory: malloc(size)
-    this->emit(X64Encoder::MOV(Register::RCX, static_cast<int64_t>(objectSize)));
-    this->emit(X64Encoder::SUB(Register::RSP, Operand::Imm(32))); // Shadow space
-    
-    uint32_t mallocOffset = this->getCurrentOffset() + 1;
+    // 1. Allocate memory: HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, size)
+    this->emit(X64Encoder::SUB(Register::RSP, Operand::Imm(32)));
+    uint32_t gphOffset2 = this->getCurrentOffset() + 1;
     this->emit(Instruction(InstructionType::CALL, Operand::Imm(0)));
-    this->relocations.add(mallocOffset, "malloc", RelocationType::REL32);
-    
+    this->relocations.add(gphOffset2, "GetProcessHeap", RelocationType::REL32);
+    this->emit(X64Encoder::ADD(Register::RSP, Operand::Imm(32)));
+
+    this->emit(X64Encoder::MOV(Register::RCX, Register::RAX));
+    this->emit(X64Encoder::MOV(Register::RDX, 8)); // HEAP_ZERO_MEMORY
+    this->emit(X64Encoder::MOV(Register::R8, static_cast<int64_t>(objectSize)));
+
+    this->emit(X64Encoder::SUB(Register::RSP, Operand::Imm(32)));
+    uint32_t haOffset2 = this->getCurrentOffset() + 1;
+    this->emit(Instruction(InstructionType::CALL, Operand::Imm(0)));
+    this->relocations.add(haOffset2, "HeapAlloc", RelocationType::REL32);
     this->emit(X64Encoder::ADD(Register::RSP, Operand::Imm(32)));
     
     // 2. Store pointer in variable
@@ -3037,12 +3065,27 @@ void CodeGenerator::generateMethodCall(const Command& cmd) {
             this->emit(X64Encoder::SHL_(Register::RDX, 3)); // * 8
             this->emit(X64Encoder::ADD(Register::RDX, Operand::Imm(16))); // + 16
 
-            // RDI has old pointer (for realloc(ptr, size))
-            // RDX has new size
+            // Use Win32 HeapReAlloc (instead of realloc)
+            // Save new size in R10 while we get the heap handle
+            this->emit(X64Encoder::MOV(Register::R10, Register::RDX));
+
+            // GetProcessHeap()
             this->emit(X64Encoder::SUB(Register::RSP, Operand::Imm(32)));
-            uint32_t reallocOff = this->getCurrentOffset() + 1;
+            uint32_t gphOffset3 = this->getCurrentOffset() + 1;
             this->emit(Instruction(InstructionType::CALL, Operand::Imm(0)));
-            this->relocations.add(reallocOff, "realloc", RelocationType::REL32);
+            this->relocations.add(gphOffset3, "GetProcessHeap", RelocationType::REL32);
+            this->emit(X64Encoder::ADD(Register::RSP, Operand::Imm(32)));
+
+            // HeapReAlloc(hHeap, dwFlags, lpMem, dwBytes)
+            this->emit(X64Encoder::MOV(Register::RCX, Register::RAX)); // hHeap
+            this->emit(X64Encoder::MOV(Register::RDX, 8));            // dwFlags (HEAP_ZERO_MEMORY)
+            this->emit(X64Encoder::MOV(Register::R8, Register::RDI));  // lpMem (old pointer)
+            this->emit(X64Encoder::MOV(Register::R9, Register::R10));  // dwBytes (new size)
+
+            this->emit(X64Encoder::SUB(Register::RSP, Operand::Imm(32)));
+            uint32_t hraOffset = this->getCurrentOffset() + 1;
+            this->emit(Instruction(InstructionType::CALL, Operand::Imm(0)));
+            this->relocations.add(hraOffset, "HeapReAlloc", RelocationType::REL32);
             this->emit(X64Encoder::ADD(Register::RSP, Operand::Imm(32)));
 
             // RAX has new pointer. Update local variable.

@@ -177,8 +177,12 @@ public:
         symbols.addImport("GetStdHandle", 1);
         symbols.addImport("WriteFile", 2);
         symbols.addImport("Sleep", 3);
+        symbols.addImport("GetProcessHeap", 36);
+        symbols.addImport("HeapAlloc", 37);
+        symbols.addImport("HeapFree", 38);
+        symbols.addImport("HeapReAlloc", 39);
         
-        // msvcrt.dll
+        // msvcrt.dll (Making these optional or replacing them)
         symbols.addImport("fopen", 4);
         symbols.addImport("fclose", 5);
         symbols.addImport("fgets", 6);
